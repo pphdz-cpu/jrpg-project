@@ -1,7 +1,5 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-const mapScreen = document.getElementById('map-screen');
-const battleScreen = document.getElementById('battle-screen');
 
 const TILE_SIZE = 40;
 const MAP_SIZE = 10;
@@ -53,8 +51,8 @@ function isWalkable(x, y) {
 
 function triggerEncounter() {
   movementEnabled = false;
-  mapScreen.style.display = 'none';
-  battleScreen.style.display = 'block';
+  document.getElementById('map-screen').style.display = 'none';
+  document.getElementById('battle-screen').style.display = 'block';
   startBattle();
 }
 
@@ -78,6 +76,7 @@ function movePlayer(dx, dy) {
 
 window.onBattleVictory = function () {
   movementEnabled = true;
+  draw();
 };
 
 document.addEventListener('keydown', (event) => {
@@ -105,4 +104,8 @@ document.addEventListener('keydown', (event) => {
   event.preventDefault();
 });
 
-draw();
+if (!canvas || !ctx) {
+  document.body.innerHTML = '<p style="color:#fff;padding:2rem;">Error: game canvas not found. Make sure index.html and all .js files are in the same folder.</p>';
+} else {
+  draw();
+}
