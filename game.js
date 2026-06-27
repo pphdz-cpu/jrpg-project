@@ -5,20 +5,44 @@ if (ctx) {
   ctx.imageSmoothingEnabled = false;
 }
 
-const TILE_SIZE = 40;
-const MAP_SCALE = 3;
+const tileSize = 40;
 const ENCOUNTER_CHANCE = 0.15;
 const WALK_FRAMES = 4;
 
-let worldWidth = 0;
-let worldHeight = 0;
-let mapCols = 0;
-let mapRows = 0;
-let map = [];
-
-const CITY_MAP_PATH = 'assets/city_map.png';
+const TILESET_PATH = 'assets/tileset.png';
 const CHARACTER_SHEET_PATH = 'assets/character_sheet.png';
 const CHARACTER_FALLBACK_PATH = 'assets/character.png';
+
+// Placeholder tile map — replace with a Tiled export later.
+// Each value is a tile index into tileset.png (0 = top-left tile).
+const map = Array.from({ length: 40 }, (_, row) => (
+  Array.from({ length: 25 }, (_, col) => {
+    if (row === 0 || row === 39 || col === 0 || col === 24) {
+      return 1;
+    }
+
+    return 0;
+  })
+));
+
+const mapRows = map.length;
+const mapCols = map[0].length;
+const worldWidth = mapCols * tileSize;
+const worldHeight = mapRows * tileSize;
+
+function createCollisionMap(cols, rows) {
+  return Array.from({ length: rows }, () => Array(cols).fill(0));
+}
+
+const collisionMap = createCollisionMap(mapCols, mapRows);
+
+for (let row = 0; row < mapRows; row += 1) {
+  for (let col = 0; col < mapCols; col += 1) {
+    if (map[row][col] === 1) {
+      collisionMap[row][col] = 1;
+    }
+  }
+}
 
 const SPRITE_FRAMES = {
   0: [
@@ -47,39 +71,9 @@ const SPRITE_FRAMES = {
   ],
 };
 
-function createWalkableMap(cols, rows) {
-  return Array.from({ length: rows }, () => Array(cols).fill(0));
-}
-
-function initializeWorldFromMap(sourceImage) {
-  worldWidth = sourceImage.naturalWidth * MAP_SCALE;
-  worldHeight = sourceImage.naturalHeight * MAP_SCALE;
-  mapCols = Math.floor(worldWidth / TILE_SIZE);
-  mapRows = Math.floor(worldHeight / TILE_SIZE);
-  map = createWalkableMap(mapCols, mapRows);
-}
-
-function buildScaledWorldMap(sourceImage) {
-  const scaledCanvas = document.createElement('canvas');
-  scaledCanvas.width = sourceImage.naturalWidth * MAP_SCALE;
-  scaledCanvas.height = sourceImage.naturalHeight * MAP_SCALE;
-
-  const scaledCtx = scaledCanvas.getContext('2d');
-  scaledCtx.imageSmoothingEnabled = false;
-  scaledCtx.drawImage(
-    sourceImage,
-    0,
-    0,
-    sourceImage.naturalWidth,
-    sourceImage.naturalHeight,
-    0,
-    0,
-    scaledCanvas.width,
-    scaledCanvas.height
-  );
-
-  return scaledCanvas;
-}
+let tilesetImage = null;
+let tilesPerRow = 0;
+let characterSheet = null;
 
 const camera = {
   x: 0,
@@ -87,10 +81,6 @@ const camera = {
   width: canvas ? canvas.width : 800,
   height: canvas ? canvas.height : 800,
 };
-
-let cityMap = null;
-let scaledWorldMap = null;
-let characterSheet = null;
 
 const player = {
   x: 1,
@@ -139,14 +129,13 @@ function preloadAssets(onComplete) {
     }
   }
 
-  loadImage(CITY_MAP_PATH)
+  loadImage(TILESET_PATH)
     .then((image) => {
-      cityMap = image;
-      initializeWorldFromMap(image);
-      scaledWorldMap = buildScaledWorldMap(image);
+      tilesetImage = image;
+      tilesPerRow = Math.floor(image.width / tileSize);
     })
     .catch(() => {
-      console.error(`Failed to load asset: ${CITY_MAP_PATH}`);
+      console.error(`Failed to load asset: ${TILESET_PATH}`);
     })
     .finally(checkComplete);
 
@@ -168,8 +157,8 @@ function preloadAssets(onComplete) {
 }
 
 function updateCamera() {
-  const playerCenterX = player.x * TILE_SIZE + TILE_SIZE / 2;
-  const playerCenterY = player.y * TILE_SIZE + TILE_SIZE / 2;
+  const playerCenterX = player.x * tileSize + tileSize / 2;
+  const playerCenterY = player.y * tileSize + tileSize / 2;
 
   camera.width = canvas.width;
   camera.height = canvas.height;
@@ -184,12 +173,12 @@ function updateCamera() {
 }
 
 function drawPlayer() {
-  const drawX = player.x * TILE_SIZE;
-  const drawY = player.y * TILE_SIZE;
+  const drawX = player.x * tileSize;
+  const drawY = player.y * tileSize;
 
   if (!characterSheet) {
     ctx.fillStyle = '#1565c0';
-    ctx.fillRect(drawX, drawY, TILE_SIZE, TILE_SIZE);
+    ctx.fillRect(drawX, drawY, tileSize, tileSize);
     return;
   }
 
@@ -198,7 +187,7 @@ function drawPlayer() {
 
   if (!rect) {
     ctx.fillStyle = '#1565c0';
-    ctx.fillRect(drawX, drawY, TILE_SIZE, TILE_SIZE);
+    ctx.fillRect(drawX, drawY, tileSize, tileSize);
     return;
   }
 
@@ -210,8 +199,8 @@ function drawPlayer() {
     rect.sh,
     drawX,
     drawY,
-    TILE_SIZE,
-    TILE_SIZE
+    tileSize,
+    tileSize
   );
 }
 
@@ -233,30 +222,34 @@ function drawMapFallback() {
   ctx.restore();
 }
 
-function drawWorldMap() {
-  if (scaledWorldMap) {
-    ctx.drawImage(scaledWorldMap, 0, 0);
+function drawTileMap() {
+  if (!tilesetImage || tilesPerRow === 0) {
+    ctx.fillStyle = '#4a6741';
+    ctx.fillRect(0, 0, worldWidth, worldHeight);
     return;
   }
 
-  if (cityMap) {
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(
-      cityMap,
-      0,
-      0,
-      cityMap.naturalWidth,
-      cityMap.naturalHeight,
-      0,
-      0,
-      worldWidth,
-      worldHeight
-    );
-    return;
-  }
+  for (let row = 0; row < mapRows; row += 1) {
+    for (let col = 0; col < mapCols; col += 1) {
+      const tileNumber = map[row][col];
+      const sx = (tileNumber % tilesPerRow) * tileSize;
+      const sy = Math.floor(tileNumber / tilesPerRow) * tileSize;
+      const destX = col * tileSize;
+      const destY = row * tileSize;
 
-  ctx.fillStyle = '#4a6741';
-  ctx.fillRect(0, 0, worldWidth, worldHeight);
+      ctx.drawImage(
+        tilesetImage,
+        sx,
+        sy,
+        tileSize,
+        tileSize,
+        destX,
+        destY,
+        tileSize,
+        tileSize
+      );
+    }
+  }
 }
 
 function draw() {
@@ -275,7 +268,7 @@ function draw() {
   ctx.save();
   ctx.translate(-camera.x, -camera.y);
   ctx.imageSmoothingEnabled = false;
-  drawWorldMap();
+  drawTileMap();
   drawPlayer();
   ctx.restore();
 }
@@ -341,7 +334,7 @@ function isWalkable(x, y) {
     return false;
   }
 
-  return map[y][x] === 0;
+  return collisionMap[y][x] === 0;
 }
 
 function setPlayerDirection(key) {
