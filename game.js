@@ -1,11 +1,13 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
 
 const TILE_SIZE = 40;
 const MAP_SIZE = 10;
 const ENCOUNTER_CHANCE = 0.15;
-const SPRITE_COLS = 4;
+const SPRITE_COLS = 6;
 const SPRITE_ROWS = 4;
+const WALK_FRAMES = 4;
 
 const TERRAIN_ASSETS = {
   grass: 'assets/grass.png',
@@ -16,6 +18,13 @@ const TERRAIN_ASSETS = {
 
 const CHARACTER_SHEET_PATH = 'assets/character_sheet.png';
 
+const DIRECTION_SPRITES = {
+  0: { row: 0, startCol: 0, cropTop: 130 },
+  1: { row: 3, startCol: 0, cropTop: 70 },
+  2: { row: 2, startCol: 1, cropTop: 75 },
+  3: { row: 1, startCol: 1, cropTop: 75 },
+};
+
 const TILE_TO_ASSET = {
   0: 'grass',
   1: 'forest',
@@ -24,6 +33,7 @@ const TILE_TO_ASSET = {
 };
 
 const cachedTiles = {};
+const cachedPlayerFrames = {};
 let characterSheet = null;
 
 const map = [
@@ -47,8 +57,34 @@ const player = {
   isMoving: false,
 };
 
+const keysHeld = new Set();
+
 let movementEnabled = true;
 let assetsReady = false;
+
+function getSpriteColX(sheet, col) {
+  return Math.round((col * sheet.width) / SPRITE_COLS);
+}
+
+function getSpriteRowY(sheet, row) {
+  return Math.round((row * sheet.height) / SPRITE_ROWS);
+}
+
+function isSpritePixel(r, g, b, a) {
+  if (a < 20) {
+    return false;
+  }
+
+  if (r < 40 && g < 40 && b < 40) {
+    return false;
+  }
+
+  if (r > 240 && g > 240 && b > 240) {
+    return false;
+  }
+
+  return true;
+}
 
 function cacheImage(key, image) {
   const offscreen = document.createElement('canvas');
@@ -56,6 +92,7 @@ function cacheImage(key, image) {
   offscreen.height = TILE_SIZE;
 
   const offCtx = offscreen.getContext('2d');
+  offCtx.imageSmoothingEnabled = false;
   offCtx.drawImage(image, 0, 0, TILE_SIZE, TILE_SIZE);
 
   cachedTiles[key] = offscreen;
@@ -77,6 +114,72 @@ function cacheFallbackTile(key) {
   offCtx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
 
   cachedTiles[key] = offscreen;
+}
+
+function cacheCharacterFrame(sheet, sx, sy, sw, sh) {
+  const temp = document.createElement('canvas');
+  temp.width = sw;
+  temp.height = sh;
+
+  const tempCtx = temp.getContext('2d');
+  tempCtx.imageSmoothingEnabled = false;
+  tempCtx.drawImage(sheet, sx, sy, sw, sh, 0, 0, sw, sh);
+
+  const { data } = tempCtx.getImageData(0, 0, sw, sh);
+  let minX = sw;
+  let minY = sh;
+  let maxX = 0;
+  let maxY = 0;
+
+  for (let y = 0; y < sh; y++) {
+    for (let x = 0; x < sw; x++) {
+      const i = (y * sw + x) * 4;
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const a = data[i + 3];
+
+      if (isSpritePixel(r, g, b, a)) {
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+    }
+  }
+
+  const frame = document.createElement('canvas');
+  frame.width = TILE_SIZE;
+  frame.height = TILE_SIZE;
+
+  const frameCtx = frame.getContext('2d');
+  frameCtx.imageSmoothingEnabled = false;
+
+  if (maxX >= minX && maxY >= minY) {
+    const cropW = maxX - minX + 1;
+    const cropH = maxY - minY + 1;
+    frameCtx.drawImage(temp, minX, minY, cropW, cropH, 0, 0, TILE_SIZE, TILE_SIZE);
+  }
+
+  return frame;
+}
+
+function buildCharacterFrames(sheet) {
+  Object.entries(DIRECTION_SPRITES).forEach(([direction, config]) => {
+    cachedPlayerFrames[direction] = [];
+
+    for (let frame = 0; frame < WALK_FRAMES; frame++) {
+      const col = config.startCol + frame;
+      const sx = getSpriteColX(sheet, col);
+      const sy = getSpriteRowY(sheet, config.row) + config.cropTop;
+      const sw = getSpriteColX(sheet, col + 1) - sx;
+      const sh = getSpriteRowY(sheet, config.row + 1) - sy - config.cropTop;
+
+      cachedPlayerFrames[direction].push(
+        cacheCharacterFrame(sheet, sx, sy, sw, sh)
+      );
+    }
+  });
 }
 
 function preloadAssets(onComplete) {
@@ -114,6 +217,7 @@ function preloadAssets(onComplete) {
 
   sheet.onload = () => {
     characterSheet = sheet;
+    buildCharacterFrames(sheet);
     checkComplete();
   };
 
@@ -128,28 +232,18 @@ function preloadAssets(onComplete) {
 function drawPlayer() {
   const drawX = player.x * TILE_SIZE;
   const drawY = player.y * TILE_SIZE;
+  const directionFrames = cachedPlayerFrames[player.direction];
 
-  if (!characterSheet) {
+  if (!directionFrames || !directionFrames[player.currentFrame]) {
     ctx.fillStyle = '#2196f3';
     ctx.fillRect(drawX, drawY, TILE_SIZE, TILE_SIZE);
     return;
   }
 
-  const frameWidth = characterSheet.width / SPRITE_COLS;
-  const frameHeight = characterSheet.height / SPRITE_ROWS;
-  const sourceX = player.currentFrame * frameWidth;
-  const sourceY = player.direction * frameHeight;
-
   ctx.drawImage(
-    characterSheet,
-    sourceX,
-    sourceY,
-    frameWidth,
-    frameHeight,
+    directionFrames[player.currentFrame],
     drawX,
-    drawY,
-    TILE_SIZE,
-    TILE_SIZE
+    drawY
   );
 }
 
@@ -199,6 +293,13 @@ function setPlayerDirection(key) {
   }
 }
 
+function isArrowKey(key) {
+  return key === 'ArrowUp'
+    || key === 'ArrowDown'
+    || key === 'ArrowLeft'
+    || key === 'ArrowRight';
+}
+
 function triggerEncounter() {
   movementEnabled = false;
   document.getElementById('map-screen').style.display = 'none';
@@ -219,7 +320,7 @@ function movePlayer(dx, dy) {
   if (isWalkable(newX, newY)) {
     player.x = newX;
     player.y = newY;
-    player.currentFrame = (player.currentFrame + 1) % SPRITE_COLS;
+    player.currentFrame = (player.currentFrame + 1) % WALK_FRAMES;
     tryRandomEncounter();
     return true;
   }
@@ -233,54 +334,46 @@ window.onBattleVictory = function () {
 };
 
 document.addEventListener('keydown', (event) => {
-  if (!movementEnabled) {
+  if (!movementEnabled || !isArrowKey(event.key) || keysHeld.has(event.key)) {
     return;
   }
 
+  keysHeld.add(event.key);
+  player.isMoving = true;
+  setPlayerDirection(event.key);
+
   switch (event.key) {
     case 'ArrowUp':
-      player.isMoving = true;
-      setPlayerDirection(event.key);
       movePlayer(0, -1);
-      draw();
       break;
     case 'ArrowDown':
-      player.isMoving = true;
-      setPlayerDirection(event.key);
       movePlayer(0, 1);
-      draw();
       break;
     case 'ArrowLeft':
-      player.isMoving = true;
-      setPlayerDirection(event.key);
       movePlayer(-1, 0);
-      draw();
       break;
     case 'ArrowRight':
-      player.isMoving = true;
-      setPlayerDirection(event.key);
       movePlayer(1, 0);
-      draw();
       break;
     default:
-      return;
+      break;
   }
 
+  draw();
   event.preventDefault();
 });
 
 document.addEventListener('keyup', (event) => {
-  switch (event.key) {
-    case 'ArrowUp':
-    case 'ArrowDown':
-    case 'ArrowLeft':
-    case 'ArrowRight':
-      player.isMoving = false;
-      player.currentFrame = 0;
-      draw();
-      break;
-    default:
-      break;
+  if (!isArrowKey(event.key)) {
+    return;
+  }
+
+  keysHeld.delete(event.key);
+
+  if (keysHeld.size === 0) {
+    player.isMoving = false;
+    player.currentFrame = 0;
+    draw();
   }
 });
 
