@@ -19,10 +19,10 @@ const TERRAIN_ASSETS = {
 const CHARACTER_SHEET_PATH = 'assets/character_sheet.png';
 
 const DIRECTION_SPRITES = {
-  0: { row: 0, startCol: 0, cropTop: 130 },
-  1: { row: 3, startCol: 0, cropTop: 70 },
-  2: { row: 2, startCol: 1, cropTop: 75 },
-  3: { row: 1, startCol: 1, cropTop: 75 },
+  0: { row: 0, startCol: 0, cropTop: 130, innerX: 0.35, innerW: 0.6 },
+  1: { row: 3, startCol: 0, cropTop: 70, innerX: 0.05, innerW: 0.55 },
+  2: { row: 2, startCol: 1, cropTop: 75, innerX: 0.35, innerW: 0.6 },
+  3: { row: 1, startCol: 1, cropTop: 75, innerX: 0.35, innerW: 0.6 },
 };
 
 const TILE_TO_ASSET = {
@@ -70,20 +70,17 @@ function getSpriteRowY(sheet, row) {
   return Math.round((row * sheet.height) / SPRITE_ROWS);
 }
 
-function isSpritePixel(r, g, b, a) {
-  if (a < 20) {
-    return false;
-  }
+function getSpriteDrawRect(sheet, direction, frameIndex) {
+  const config = DIRECTION_SPRITES[direction];
+  const col = config.startCol + frameIndex;
+  const sx = getSpriteColX(sheet, col);
+  const sy = getSpriteRowY(sheet, config.row) + config.cropTop;
+  const sw = getSpriteColX(sheet, col + 1) - sx;
+  const sh = getSpriteRowY(sheet, config.row + 1) - sy - config.cropTop;
+  const innerX = sx + Math.round(sw * config.innerX);
+  const innerW = Math.round(sw * config.innerW);
 
-  if (r < 40 && g < 40 && b < 40) {
-    return false;
-  }
-
-  if (r > 240 && g > 240 && b > 240) {
-    return false;
-  }
-
-  return true;
+  return { sx: innerX, sy, sw: innerW, sh };
 }
 
 function cacheImage(key, image) {
@@ -116,67 +113,26 @@ function cacheFallbackTile(key) {
   cachedTiles[key] = offscreen;
 }
 
-function cacheCharacterFrame(sheet, sx, sy, sw, sh) {
-  const temp = document.createElement('canvas');
-  temp.width = sw;
-  temp.height = sh;
-
-  const tempCtx = temp.getContext('2d');
-  tempCtx.imageSmoothingEnabled = false;
-  tempCtx.drawImage(sheet, sx, sy, sw, sh, 0, 0, sw, sh);
-
-  const { data } = tempCtx.getImageData(0, 0, sw, sh);
-  let minX = sw;
-  let minY = sh;
-  let maxX = 0;
-  let maxY = 0;
-
-  for (let y = 0; y < sh; y++) {
-    for (let x = 0; x < sw; x++) {
-      const i = (y * sw + x) * 4;
-      const r = data[i];
-      const g = data[i + 1];
-      const b = data[i + 2];
-      const a = data[i + 3];
-
-      if (isSpritePixel(r, g, b, a)) {
-        minX = Math.min(minX, x);
-        minY = Math.min(minY, y);
-        maxX = Math.max(maxX, x);
-        maxY = Math.max(maxY, y);
-      }
-    }
-  }
-
+function cacheCharacterFrame(sheet, direction, frameIndex) {
+  const { sx, sy, sw, sh } = getSpriteDrawRect(sheet, direction, frameIndex);
   const frame = document.createElement('canvas');
   frame.width = TILE_SIZE;
   frame.height = TILE_SIZE;
 
   const frameCtx = frame.getContext('2d');
   frameCtx.imageSmoothingEnabled = false;
-
-  if (maxX >= minX && maxY >= minY) {
-    const cropW = maxX - minX + 1;
-    const cropH = maxY - minY + 1;
-    frameCtx.drawImage(temp, minX, minY, cropW, cropH, 0, 0, TILE_SIZE, TILE_SIZE);
-  }
+  frameCtx.drawImage(sheet, sx, sy, sw, sh, 0, 0, TILE_SIZE, TILE_SIZE);
 
   return frame;
 }
 
 function buildCharacterFrames(sheet) {
-  Object.entries(DIRECTION_SPRITES).forEach(([direction, config]) => {
+  Object.keys(DIRECTION_SPRITES).forEach((direction) => {
     cachedPlayerFrames[direction] = [];
 
     for (let frame = 0; frame < WALK_FRAMES; frame++) {
-      const col = config.startCol + frame;
-      const sx = getSpriteColX(sheet, col);
-      const sy = getSpriteRowY(sheet, config.row) + config.cropTop;
-      const sw = getSpriteColX(sheet, col + 1) - sx;
-      const sh = getSpriteRowY(sheet, config.row + 1) - sy - config.cropTop;
-
       cachedPlayerFrames[direction].push(
-        cacheCharacterFrame(sheet, sx, sy, sw, sh)
+        cacheCharacterFrame(sheet, Number(direction), frame)
       );
     }
   });
@@ -216,8 +172,14 @@ function preloadAssets(onComplete) {
   const sheet = new Image();
 
   sheet.onload = () => {
-    characterSheet = sheet;
-    buildCharacterFrames(sheet);
+    try {
+      characterSheet = sheet;
+      buildCharacterFrames(sheet);
+    } catch (error) {
+      console.error('Failed to build character frames:', error);
+      characterSheet = null;
+    }
+
     checkComplete();
   };
 
@@ -233,18 +195,35 @@ function drawPlayer() {
   const drawX = player.x * TILE_SIZE;
   const drawY = player.y * TILE_SIZE;
   const directionFrames = cachedPlayerFrames[player.direction];
+  const frameCanvas = directionFrames && directionFrames[player.currentFrame];
 
-  if (!directionFrames || !directionFrames[player.currentFrame]) {
-    ctx.fillStyle = '#2196f3';
-    ctx.fillRect(drawX, drawY, TILE_SIZE, TILE_SIZE);
+  if (frameCanvas) {
+    ctx.drawImage(frameCanvas, drawX, drawY);
     return;
   }
 
-  ctx.drawImage(
-    directionFrames[player.currentFrame],
-    drawX,
-    drawY
-  );
+  if (characterSheet) {
+    const { sx, sy, sw, sh } = getSpriteDrawRect(
+      characterSheet,
+      player.direction,
+      player.currentFrame
+    );
+    ctx.drawImage(
+      characterSheet,
+      sx,
+      sy,
+      sw,
+      sh,
+      drawX,
+      drawY,
+      TILE_SIZE,
+      TILE_SIZE
+    );
+    return;
+  }
+
+  ctx.fillStyle = '#2196f3';
+  ctx.fillRect(drawX, drawY, TILE_SIZE, TILE_SIZE);
 }
 
 function draw() {
