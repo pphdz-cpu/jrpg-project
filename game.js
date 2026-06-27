@@ -79,8 +79,6 @@ const player = {
   isMoving: false,
 };
 
-const CHARACTER_ID = 'char_001';
-
 const pauseMenu = document.getElementById('pause-menu');
 const pauseNameEl = document.getElementById('pause-name');
 const pauseJobEl = document.getElementById('pause-job');
@@ -209,8 +207,38 @@ function drawPlayer() {
   );
 }
 
+function drawMapFallback() {
+  if (!ctx) {
+    return;
+  }
+
+  const colors = {
+    0: '#4caf50',
+    1: '#2e5a2e',
+    2: '#c4a35a',
+    3: '#8b6914',
+  };
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  for (let row = 0; row < MAP_SIZE; row++) {
+    for (let col = 0; col < MAP_SIZE; col++) {
+      ctx.fillStyle = colors[map[row][col]];
+      ctx.fillRect(col * TILE_SIZE, row * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+    }
+  }
+
+  ctx.fillStyle = '#1565c0';
+  ctx.fillRect(player.x * TILE_SIZE, player.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+}
+
 function draw() {
-  if (!assetsReady || !ctx) {
+  if (!ctx) {
+    return;
+  }
+
+  if (!assetsReady) {
+    drawMapFallback();
     return;
   }
 
@@ -440,6 +468,7 @@ function initGame() {
   }
 
   initPauseMenu();
+  drawMapFallback();
   preloadAssets(draw);
 }
 
