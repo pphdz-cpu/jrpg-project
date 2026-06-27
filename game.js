@@ -8,8 +8,6 @@ if (ctx) {
 const TILE_SIZE = 40;
 const MAP_SIZE = 10;
 const ENCOUNTER_CHANCE = 0.15;
-const SPRITE_COLS = 6;
-const SPRITE_ROWS = 4;
 const WALK_FRAMES = 4;
 
 const TERRAIN_ASSETS = {
@@ -22,11 +20,32 @@ const TERRAIN_ASSETS = {
 const CHARACTER_SHEET_PATH = 'assets/character_sheet.png';
 const CHARACTER_FALLBACK_PATH = 'assets/character.png';
 
-const DIRECTION_SPRITES = {
-  0: { row: 0, startCol: 0, cropTop: 130, innerX: 0.35, innerW: 0.6 },
-  1: { row: 3, startCol: 0, cropTop: 70, innerX: 0.05, innerW: 0.55 },
-  2: { row: 2, startCol: 1, cropTop: 75, innerX: 0.35, innerW: 0.6 },
-  3: { row: 1, startCol: 1, cropTop: 75, innerX: 0.35, innerW: 0.6 },
+// Precomputed crop rectangles from character_sheet.png (6 cols x 4 rows)
+const SPRITE_FRAMES = {
+  0: [
+    { sx: 146, sy: 130, sw: 195, sh: 252 },
+    { sx: 341, sy: 130, sw: 342, sh: 252 },
+    { sx: 683, sy: 130, sw: 314, sh: 252 },
+    { sx: 1071, sy: 130, sw: 226, sh: 252 },
+  ],
+  1: [
+    { sx: 184, sy: 1607, sw: 157, sh: 371 },
+    { sx: 341, sy: 1606, sw: 342, sh: 372 },
+    { sx: 683, sy: 1606, sw: 310, sh: 372 },
+    { sx: 1111, sy: 1606, sw: 178, sh: 372 },
+  ],
+  2: [
+    { sx: 341, sy: 1099, sw: 342, sh: 362 },
+    { sx: 683, sy: 1099, sw: 294, sh: 362 },
+    { sx: 1096, sy: 1099, sw: 185, sh: 362 },
+    { sx: 1392, sy: 1099, sw: 315, sh: 362 },
+  ],
+  3: [
+    { sx: 341, sy: 587, sw: 342, sh: 362 },
+    { sx: 683, sy: 587, sw: 318, sh: 362 },
+    { sx: 1057, sy: 587, sw: 308, sh: 362 },
+    { sx: 1365, sy: 587, sw: 342, sh: 362 },
+  ],
 };
 
 const TILE_TO_ASSET = {
@@ -37,7 +56,6 @@ const TILE_TO_ASSET = {
 };
 
 const cachedTiles = {};
-const cachedPlayerFrames = {};
 let characterSheet = null;
 
 const map = [
@@ -78,27 +96,6 @@ let movementEnabled = true;
 let assetsReady = false;
 let isPaused = false;
 
-function getSpriteColX(sheet, col) {
-  return Math.round((col * sheet.width) / SPRITE_COLS);
-}
-
-function getSpriteRowY(sheet, row) {
-  return Math.round((row * sheet.height) / SPRITE_ROWS);
-}
-
-function getSpriteDrawRect(sheet, direction, frameIndex) {
-  const config = DIRECTION_SPRITES[direction];
-  const col = config.startCol + frameIndex;
-  const sx = getSpriteColX(sheet, col);
-  const sy = getSpriteRowY(sheet, config.row) + config.cropTop;
-  const sw = getSpriteColX(sheet, col + 1) - sx;
-  const sh = getSpriteRowY(sheet, config.row + 1) - sy - config.cropTop;
-  const innerX = sx + Math.round(sw * config.innerX);
-  const innerW = Math.round(sw * config.innerW);
-
-  return { sx: innerX, sy, sw: innerW, sh };
-}
-
 function cacheImage(key, image) {
   const offscreen = document.createElement('canvas');
   offscreen.width = TILE_SIZE;
@@ -127,31 +124,6 @@ function cacheFallbackTile(key) {
   offCtx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
 
   cachedTiles[key] = offscreen;
-}
-
-function cacheCharacterFrame(sheet, direction, frameIndex) {
-  const { sx, sy, sw, sh } = getSpriteDrawRect(sheet, direction, frameIndex);
-  const frame = document.createElement('canvas');
-  frame.width = TILE_SIZE;
-  frame.height = TILE_SIZE;
-
-  const frameCtx = frame.getContext('2d');
-  frameCtx.imageSmoothingEnabled = false;
-  frameCtx.drawImage(sheet, sx, sy, sw, sh, 0, 0, TILE_SIZE, TILE_SIZE);
-
-  return frame;
-}
-
-function buildCharacterFrames(sheet) {
-  Object.keys(DIRECTION_SPRITES).forEach((direction) => {
-    cachedPlayerFrames[direction] = [];
-
-    for (let frame = 0; frame < WALK_FRAMES; frame++) {
-      cachedPlayerFrames[direction].push(
-        cacheCharacterFrame(sheet, Number(direction), frame)
-      );
-    }
-  });
 }
 
 function loadImage(src) {
@@ -192,14 +164,12 @@ function preloadAssets(onComplete) {
   loadImage(CHARACTER_SHEET_PATH)
     .then((sheet) => {
       characterSheet = sheet;
-      buildCharacterFrames(sheet);
     })
     .catch(() => {
       console.error(`Failed to load asset: ${CHARACTER_SHEET_PATH}`);
       return loadImage(CHARACTER_FALLBACK_PATH)
         .then((image) => {
           characterSheet = image;
-          buildCharacterFrames(image);
         })
         .catch(() => {
           console.error(`Failed to load asset: ${CHARACTER_FALLBACK_PATH}`);
@@ -211,54 +181,32 @@ function preloadAssets(onComplete) {
 function drawPlayer() {
   const drawX = player.x * TILE_SIZE;
   const drawY = player.y * TILE_SIZE;
-  const directionFrames = cachedPlayerFrames[player.direction];
-  const frameCanvas = directionFrames && directionFrames[player.currentFrame];
 
-  ctx.fillStyle = 'rgba(33, 150, 243, 0.25)';
+  ctx.fillStyle = '#1565c0';
   ctx.fillRect(drawX, drawY, TILE_SIZE, TILE_SIZE);
 
-  if (frameCanvas) {
-    ctx.drawImage(frameCanvas, drawX, drawY);
+  if (!characterSheet) {
     return;
   }
 
-  if (characterSheet) {
-    const { sx, sy, sw, sh } = getSpriteDrawRect(
-      characterSheet,
-      player.direction,
-      player.currentFrame
-    );
-    ctx.drawImage(
-      characterSheet,
-      sx,
-      sy,
-      sw,
-      sh,
-      drawX,
-      drawY,
-      TILE_SIZE,
-      TILE_SIZE
-    );
+  const frames = SPRITE_FRAMES[player.direction];
+  const rect = frames && frames[player.currentFrame];
+
+  if (!rect) {
     return;
   }
 
-  if (fallbackCharacterImage) {
-    ctx.drawImage(
-      fallbackCharacterImage,
-      0,
-      0,
-      fallbackCharacterImage.width,
-      fallbackCharacterImage.height,
-      drawX,
-      drawY,
-      TILE_SIZE,
-      TILE_SIZE
-    );
-    return;
-  }
-
-  ctx.fillStyle = '#2196f3';
-  ctx.fillRect(drawX, drawY, TILE_SIZE, TILE_SIZE);
+  ctx.drawImage(
+    characterSheet,
+    rect.sx,
+    rect.sy,
+    rect.sw,
+    rect.sh,
+    drawX,
+    drawY,
+    TILE_SIZE,
+    TILE_SIZE
+  );
 }
 
 function draw() {
@@ -272,11 +220,15 @@ function draw() {
     for (let col = 0; col < MAP_SIZE; col++) {
       const tile = map[row][col];
       const tileKey = TILE_TO_ASSET[tile];
-      ctx.drawImage(
-        cachedTiles[tileKey],
-        col * TILE_SIZE,
-        row * TILE_SIZE
-      );
+      const tileCanvas = cachedTiles[tileKey];
+
+      if (tileCanvas) {
+        ctx.drawImage(
+          tileCanvas,
+          col * TILE_SIZE,
+          row * TILE_SIZE
+        );
+      }
     }
   }
 
