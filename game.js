@@ -5,22 +5,21 @@ if (ctx) {
   ctx.imageSmoothingEnabled = false;
 }
 
-const MAP_SIZE = 10;
-const TILE_SIZE = canvas ? canvas.width / MAP_SIZE : 80;
+const TILE_SIZE = 40;
+const MAP_SCALE = 3;
+const SOURCE_MAP_WIDTH = 256;
+const SOURCE_MAP_HEIGHT = 1450;
+const WORLD_WIDTH = SOURCE_MAP_WIDTH * MAP_SCALE;
+const WORLD_HEIGHT = SOURCE_MAP_HEIGHT * MAP_SCALE;
+const MAP_COLS = Math.ceil(WORLD_WIDTH / TILE_SIZE);
+const MAP_ROWS = Math.ceil(WORLD_HEIGHT / TILE_SIZE);
 const ENCOUNTER_CHANCE = 0.15;
 const WALK_FRAMES = 4;
 
-const TERRAIN_ASSETS = {
-  grass: 'assets/grass.png',
-  forest: 'assets/forest.png',
-  path: 'assets/path.png',
-  town: 'assets/town.png',
-};
-
+const CITY_MAP_PATH = 'assets/city_map.png';
 const CHARACTER_SHEET_PATH = 'assets/character_sheet.png';
 const CHARACTER_FALLBACK_PATH = 'assets/character.png';
 
-// Precomputed crop rectangles from character_sheet.png (6 cols x 4 rows)
 const SPRITE_FRAMES = {
   0: [
     { sx: 146, sy: 130, sw: 195, sh: 252 },
@@ -48,28 +47,21 @@ const SPRITE_FRAMES = {
   ],
 };
 
-const TILE_TO_ASSET = {
-  0: 'grass',
-  1: 'forest',
-  2: 'path',
-  3: 'town',
+function createWalkableMap(cols, rows) {
+  return Array.from({ length: rows }, () => Array(cols).fill(0));
+}
+
+const map = createWalkableMap(MAP_COLS, MAP_ROWS);
+
+const camera = {
+  x: 0,
+  y: 0,
+  width: canvas ? canvas.width : 800,
+  height: canvas ? canvas.height : 800,
 };
 
-const cachedTiles = {};
+let cityMap = null;
 let characterSheet = null;
-
-const map = [
-  [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-  [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 2, 2, 2, 2, 2, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 2, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 2, 0, 0, 1],
-  [1, 0, 0, 0, 0, 2, 2, 0, 0, 1],
-  [1, 0, 0, 0, 0, 2, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 2, 2, 2, 0, 1],
-  [1, 0, 0, 0, 0, 0, 0, 2, 3, 1],
-  [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-];
 
 const player = {
   x: 1,
@@ -96,36 +88,6 @@ let movementEnabled = true;
 let assetsReady = false;
 let isPaused = false;
 
-function cacheImage(key, image) {
-  const offscreen = document.createElement('canvas');
-  offscreen.width = TILE_SIZE;
-  offscreen.height = TILE_SIZE;
-
-  const offCtx = offscreen.getContext('2d');
-  offCtx.imageSmoothingEnabled = false;
-  offCtx.drawImage(image, 0, 0, TILE_SIZE, TILE_SIZE);
-
-  cachedTiles[key] = offscreen;
-}
-
-function cacheFallbackTile(key) {
-  const offscreen = document.createElement('canvas');
-  offscreen.width = TILE_SIZE;
-  offscreen.height = TILE_SIZE;
-
-  const offCtx = offscreen.getContext('2d');
-  const colors = {
-    grass: '#4caf50',
-    forest: '#2e5a2e',
-    path: '#c4a35a',
-    town: '#8b6914',
-  };
-  offCtx.fillStyle = colors[key];
-  offCtx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
-
-  cachedTiles[key] = offscreen;
-}
-
 function loadImage(src) {
   return new Promise((resolve, reject) => {
     const image = new Image();
@@ -136,9 +98,8 @@ function loadImage(src) {
 }
 
 function preloadAssets(onComplete) {
-  const terrainKeys = Object.keys(TERRAIN_ASSETS);
   let loadedCount = 0;
-  const totalAssets = terrainKeys.length + 1;
+  const totalAssets = 2;
 
   function checkComplete() {
     loadedCount += 1;
@@ -149,17 +110,14 @@ function preloadAssets(onComplete) {
     }
   }
 
-  terrainKeys.forEach((key) => {
-    loadImage(TERRAIN_ASSETS[key])
-      .then((image) => {
-        cacheImage(key, image);
-      })
-      .catch(() => {
-        console.error(`Failed to load asset: ${TERRAIN_ASSETS[key]}`);
-        cacheFallbackTile(key);
-      })
-      .finally(checkComplete);
-  });
+  loadImage(CITY_MAP_PATH)
+    .then((image) => {
+      cityMap = image;
+    })
+    .catch(() => {
+      console.error(`Failed to load asset: ${CITY_MAP_PATH}`);
+    })
+    .finally(checkComplete);
 
   loadImage(CHARACTER_SHEET_PATH)
     .then((sheet) => {
@@ -178,14 +136,29 @@ function preloadAssets(onComplete) {
     .finally(checkComplete);
 }
 
+function updateCamera() {
+  const playerCenterX = player.x * TILE_SIZE + TILE_SIZE / 2;
+  const playerCenterY = player.y * TILE_SIZE + TILE_SIZE / 2;
+
+  camera.width = canvas.width;
+  camera.height = canvas.height;
+  camera.x = playerCenterX - camera.width / 2;
+  camera.y = playerCenterY - camera.height / 2;
+
+  const maxCameraX = Math.max(0, WORLD_WIDTH - camera.width);
+  const maxCameraY = Math.max(0, WORLD_HEIGHT - camera.height);
+
+  camera.x = Math.max(0, Math.min(camera.x, maxCameraX));
+  camera.y = Math.max(0, Math.min(camera.y, maxCameraY));
+}
+
 function drawPlayer() {
   const drawX = player.x * TILE_SIZE;
   const drawY = player.y * TILE_SIZE;
 
-  ctx.fillStyle = '#1565c0';
-  ctx.fillRect(drawX, drawY, TILE_SIZE, TILE_SIZE);
-
   if (!characterSheet) {
+    ctx.fillStyle = '#1565c0';
+    ctx.fillRect(drawX, drawY, TILE_SIZE, TILE_SIZE);
     return;
   }
 
@@ -193,6 +166,8 @@ function drawPlayer() {
   const rect = frames && frames[player.currentFrame];
 
   if (!rect) {
+    ctx.fillStyle = '#1565c0';
+    ctx.fillRect(drawX, drawY, TILE_SIZE, TILE_SIZE);
     return;
   }
 
@@ -214,24 +189,15 @@ function drawMapFallback() {
     return;
   }
 
-  const colors = {
-    0: '#4caf50',
-    1: '#2e5a2e',
-    2: '#c4a35a',
-    3: '#8b6914',
-  };
-
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  updateCamera();
 
-  for (let row = 0; row < MAP_SIZE; row++) {
-    for (let col = 0; col < MAP_SIZE; col++) {
-      ctx.fillStyle = colors[map[row][col]];
-      ctx.fillRect(col * TILE_SIZE, row * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-    }
-  }
-
-  ctx.fillStyle = '#1565c0';
-  ctx.fillRect(player.x * TILE_SIZE, player.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+  ctx.save();
+  ctx.translate(-camera.x, -camera.y);
+  ctx.fillStyle = '#4a6741';
+  ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+  drawPlayer();
+  ctx.restore();
 }
 
 function draw() {
@@ -245,24 +211,20 @@ function draw() {
   }
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  updateCamera();
 
-  for (let row = 0; row < MAP_SIZE; row++) {
-    for (let col = 0; col < MAP_SIZE; col++) {
-      const tile = map[row][col];
-      const tileKey = TILE_TO_ASSET[tile];
-      const tileCanvas = cachedTiles[tileKey];
+  ctx.save();
+  ctx.translate(-camera.x, -camera.y);
 
-      if (tileCanvas) {
-        ctx.drawImage(
-          tileCanvas,
-          col * TILE_SIZE,
-          row * TILE_SIZE
-        );
-      }
-    }
+  if (cityMap) {
+    ctx.drawImage(cityMap, 0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+  } else {
+    ctx.fillStyle = '#4a6741';
+    ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
   }
 
   drawPlayer();
+  ctx.restore();
 }
 
 function isOnMapScreen() {
@@ -322,8 +284,11 @@ function togglePauseMenu() {
 }
 
 function isWalkable(x, y) {
-  const tile = map[y][x];
-  return tile === 0 || tile === 2 || tile === 3;
+  if (x < 0 || y < 0 || x >= MAP_COLS || y >= MAP_ROWS) {
+    return false;
+  }
+
+  return map[y][x] === 0;
 }
 
 function setPlayerDirection(key) {
