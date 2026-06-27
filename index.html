@@ -211,13 +211,20 @@
     #pause-menu p {
       margin: 8px 0;
     }
+
+    #pause-menu {
+      bottom: 0;
+      top: auto;
+      max-height: 100%;
+      overflow-y: auto;
+    }
   </style>
 </head>
 <body>
   <div id="map-screen">
     <canvas id="gameCanvas" width="400" height="400"></canvas>
 
-    <div id="pause-menu" style="display: none; position: absolute; z-index: 10; background: black; color: white; padding: 20px; top: 0; left: 0; width: 100%; box-sizing: border-box;">
+    <div id="pause-menu" style="display: none; position: absolute; z-index: 10; background: black; color: white; padding: 20px; bottom: 0; left: 0; width: 100%; box-sizing: border-box;">
       <h2>Pause Menu</h2>
       <p>Name: <span id="pause-name">Bartz</span></p>
       <p>Current Job: <span id="pause-job">Knight</span></p>

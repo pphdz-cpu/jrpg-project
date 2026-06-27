@@ -1,6 +1,9 @@
 const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-ctx.imageSmoothingEnabled = false;
+const ctx = canvas && canvas.getContext('2d');
+
+if (ctx) {
+  ctx.imageSmoothingEnabled = false;
+}
 
 const TILE_SIZE = 40;
 const MAP_SIZE = 10;
@@ -17,6 +20,7 @@ const TERRAIN_ASSETS = {
 };
 
 const CHARACTER_SHEET_PATH = 'assets/character_sheet.png';
+const CHARACTER_FALLBACK_PATH = 'assets/character.png';
 
 const DIRECTION_SPRITES = {
   0: { row: 0, startCol: 0, cropTop: 130, innerX: 0.35, innerW: 0.6 },
@@ -150,6 +154,15 @@ function buildCharacterFrames(sheet) {
   });
 }
 
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error(`Failed to load asset: ${src}`));
+    image.src = src;
+  });
+}
+
 function preloadAssets(onComplete) {
   const terrainKeys = Object.keys(TERRAIN_ASSETS);
   let loadedCount = 0;
@@ -165,42 +178,34 @@ function preloadAssets(onComplete) {
   }
 
   terrainKeys.forEach((key) => {
-    const image = new Image();
-
-    image.onload = () => {
-      cacheImage(key, image);
-      checkComplete();
-    };
-
-    image.onerror = () => {
-      console.error(`Failed to load asset: ${TERRAIN_ASSETS[key]}`);
-      cacheFallbackTile(key);
-      checkComplete();
-    };
-
-    image.src = TERRAIN_ASSETS[key];
+    loadImage(TERRAIN_ASSETS[key])
+      .then((image) => {
+        cacheImage(key, image);
+      })
+      .catch(() => {
+        console.error(`Failed to load asset: ${TERRAIN_ASSETS[key]}`);
+        cacheFallbackTile(key);
+      })
+      .finally(checkComplete);
   });
 
-  const sheet = new Image();
-
-  sheet.onload = () => {
-    try {
+  loadImage(CHARACTER_SHEET_PATH)
+    .then((sheet) => {
       characterSheet = sheet;
       buildCharacterFrames(sheet);
-    } catch (error) {
-      console.error('Failed to build character frames:', error);
-      characterSheet = null;
-    }
-
-    checkComplete();
-  };
-
-  sheet.onerror = () => {
-    console.error(`Failed to load asset: ${CHARACTER_SHEET_PATH}`);
-    checkComplete();
-  };
-
-  sheet.src = CHARACTER_SHEET_PATH;
+    })
+    .catch(() => {
+      console.error(`Failed to load asset: ${CHARACTER_SHEET_PATH}`);
+      return loadImage(CHARACTER_FALLBACK_PATH)
+        .then((image) => {
+          characterSheet = image;
+          buildCharacterFrames(image);
+        })
+        .catch(() => {
+          console.error(`Failed to load asset: ${CHARACTER_FALLBACK_PATH}`);
+        });
+    })
+    .finally(checkComplete);
 }
 
 function drawPlayer() {
@@ -208,6 +213,9 @@ function drawPlayer() {
   const drawY = player.y * TILE_SIZE;
   const directionFrames = cachedPlayerFrames[player.direction];
   const frameCanvas = directionFrames && directionFrames[player.currentFrame];
+
+  ctx.fillStyle = 'rgba(33, 150, 243, 0.25)';
+  ctx.fillRect(drawX, drawY, TILE_SIZE, TILE_SIZE);
 
   if (frameCanvas) {
     ctx.drawImage(frameCanvas, drawX, drawY);
@@ -234,12 +242,27 @@ function drawPlayer() {
     return;
   }
 
+  if (fallbackCharacterImage) {
+    ctx.drawImage(
+      fallbackCharacterImage,
+      0,
+      0,
+      fallbackCharacterImage.width,
+      fallbackCharacterImage.height,
+      drawX,
+      drawY,
+      TILE_SIZE,
+      TILE_SIZE
+    );
+    return;
+  }
+
   ctx.fillStyle = '#2196f3';
   ctx.fillRect(drawX, drawY, TILE_SIZE, TILE_SIZE);
 }
 
 function draw() {
-  if (!assetsReady) {
+  if (!assetsReady || !ctx) {
     return;
   }
 
@@ -266,6 +289,10 @@ function isOnMapScreen() {
 }
 
 function updatePauseMenuStats() {
+  if (!pauseNameEl || !pauseJobEl || !pauseHpEl || !pauseSpeedEl) {
+    return;
+  }
+
   const character = characters[CHARACTER_ID];
   const stats = calculateStats(CHARACTER_ID);
   const job = jobs[character.current_job];
@@ -283,12 +310,16 @@ function updatePauseMenuStats() {
 function openPauseMenu() {
   isPaused = true;
   updatePauseMenuStats();
-  pauseMenu.style.display = 'block';
+  if (pauseMenu) {
+    pauseMenu.style.display = 'block';
+  }
 }
 
 function closePauseMenu() {
   isPaused = false;
-  pauseMenu.style.display = 'none';
+  if (pauseMenu) {
+    pauseMenu.style.display = 'none';
+  }
 }
 
 function switchJob(jobId) {
@@ -341,6 +372,7 @@ function isArrowKey(key) {
 
 function triggerEncounter() {
   movementEnabled = false;
+  closePauseMenu();
   document.getElementById('map-screen').style.display = 'none';
   document.getElementById('battle-screen').style.display = 'block';
   startBattle();
@@ -373,8 +405,29 @@ function movePlayer(dx, dy) {
 
 window.onBattleVictory = function () {
   movementEnabled = true;
+  closePauseMenu();
   draw();
 };
+
+function initPauseMenu() {
+  if (switchKnightBtn) {
+    switchKnightBtn.addEventListener('click', () => {
+      switchJob('job_knight');
+    });
+  }
+
+  if (switchBlackMageBtn) {
+    switchBlackMageBtn.addEventListener('click', () => {
+      switchJob('job_black_mage');
+    });
+  }
+
+  if (closeMenuBtn) {
+    closeMenuBtn.addEventListener('click', () => {
+      closePauseMenu();
+    });
+  }
+}
 
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Enter' && isOnMapScreen() && movementEnabled) {
@@ -428,20 +481,14 @@ document.addEventListener('keyup', (event) => {
   }
 });
 
-switchKnightBtn.addEventListener('click', () => {
-  switchJob('job_knight');
-});
+function initGame() {
+  if (!canvas || !ctx) {
+    document.body.innerHTML = '<p style="color:#fff;padding:2rem;">Error: game canvas not found. Make sure index.html and all .js files are in the same folder.</p>';
+    return;
+  }
 
-switchBlackMageBtn.addEventListener('click', () => {
-  switchJob('job_black_mage');
-});
-
-closeMenuBtn.addEventListener('click', () => {
-  closePauseMenu();
-});
-
-if (!canvas || !ctx) {
-  document.body.innerHTML = '<p style="color:#fff;padding:2rem;">Error: game canvas not found. Make sure index.html and all .js files are in the same folder.</p>';
-} else {
+  initPauseMenu();
   preloadAssets(draw);
 }
+
+initGame();
