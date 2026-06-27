@@ -1,6 +1,8 @@
 const GOBLIN_MAX_HP = 50;
 const GOBLIN_SPEED = 30;
 const MAGIC_COST = 5;
+const ATTACK_DAMAGE = 15;
+const MAGIC_DAMAGE = 25;
 const PARTY_IDS = ['char_001', 'char_002'];
 
 const enemyHpEl = document.getElementById('enemyHp');
@@ -286,24 +288,8 @@ function castMagic() {
   }
 
   member.mp -= MAGIC_COST;
-
-  if (member.jobId === 'job_black_mage') {
-    goblin.hp = Math.max(0, goblin.hp - 25);
-    showBattleMessage(`${member.name} casts Fire!`);
-  } else if (member.jobId === 'job_white_mage') {
-    party.forEach((ally) => {
-      if (ally.hp > 0) {
-        ally.hp = Math.min(ally.maxHp, ally.hp + 20);
-      }
-    });
-    showBattleMessage(`${member.name} casts Cure!`);
-  } else {
-    member.mp += MAGIC_COST;
-    showBattleMessage('No spell available for this job!');
-    updateDisplay();
-    return;
-  }
-
+  goblin.hp = Math.max(0, goblin.hp - MAGIC_DAMAGE);
+  showBattleMessage(`${member.name} casts Magic!`);
   finishPlayerTurn();
 }
 
@@ -314,7 +300,7 @@ attackBtn.addEventListener('click', () => {
     return;
   }
 
-  goblin.hp = Math.max(0, goblin.hp - 15);
+  goblin.hp = Math.max(0, goblin.hp - ATTACK_DAMAGE);
   showBattleMessage(`${member.name} attacks!`);
   finishPlayerTurn();
 });
