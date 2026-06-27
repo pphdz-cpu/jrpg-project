@@ -7,14 +7,14 @@ if (ctx) {
 
 const TILE_SIZE = 40;
 const MAP_SCALE = 3;
-const SOURCE_MAP_WIDTH = 256;
-const SOURCE_MAP_HEIGHT = 1450;
-const WORLD_WIDTH = SOURCE_MAP_WIDTH * MAP_SCALE;
-const WORLD_HEIGHT = SOURCE_MAP_HEIGHT * MAP_SCALE;
-const MAP_COLS = Math.ceil(WORLD_WIDTH / TILE_SIZE);
-const MAP_ROWS = Math.ceil(WORLD_HEIGHT / TILE_SIZE);
 const ENCOUNTER_CHANCE = 0.15;
 const WALK_FRAMES = 4;
+
+let worldWidth = 0;
+let worldHeight = 0;
+let mapCols = 0;
+let mapRows = 0;
+let map = [];
 
 const CITY_MAP_PATH = 'assets/city_map.png';
 const CHARACTER_SHEET_PATH = 'assets/character_sheet.png';
@@ -51,7 +51,35 @@ function createWalkableMap(cols, rows) {
   return Array.from({ length: rows }, () => Array(cols).fill(0));
 }
 
-const map = createWalkableMap(MAP_COLS, MAP_ROWS);
+function initializeWorldFromMap(sourceImage) {
+  worldWidth = sourceImage.naturalWidth * MAP_SCALE;
+  worldHeight = sourceImage.naturalHeight * MAP_SCALE;
+  mapCols = Math.floor(worldWidth / TILE_SIZE);
+  mapRows = Math.floor(worldHeight / TILE_SIZE);
+  map = createWalkableMap(mapCols, mapRows);
+}
+
+function buildScaledWorldMap(sourceImage) {
+  const scaledCanvas = document.createElement('canvas');
+  scaledCanvas.width = sourceImage.naturalWidth * MAP_SCALE;
+  scaledCanvas.height = sourceImage.naturalHeight * MAP_SCALE;
+
+  const scaledCtx = scaledCanvas.getContext('2d');
+  scaledCtx.imageSmoothingEnabled = false;
+  scaledCtx.drawImage(
+    sourceImage,
+    0,
+    0,
+    sourceImage.naturalWidth,
+    sourceImage.naturalHeight,
+    0,
+    0,
+    scaledCanvas.width,
+    scaledCanvas.height
+  );
+
+  return scaledCanvas;
+}
 
 const camera = {
   x: 0,
@@ -61,6 +89,7 @@ const camera = {
 };
 
 let cityMap = null;
+let scaledWorldMap = null;
 let characterSheet = null;
 
 const player = {
@@ -113,6 +142,8 @@ function preloadAssets(onComplete) {
   loadImage(CITY_MAP_PATH)
     .then((image) => {
       cityMap = image;
+      initializeWorldFromMap(image);
+      scaledWorldMap = buildScaledWorldMap(image);
     })
     .catch(() => {
       console.error(`Failed to load asset: ${CITY_MAP_PATH}`);
@@ -145,8 +176,8 @@ function updateCamera() {
   camera.x = playerCenterX - camera.width / 2;
   camera.y = playerCenterY - camera.height / 2;
 
-  const maxCameraX = Math.max(0, WORLD_WIDTH - camera.width);
-  const maxCameraY = Math.max(0, WORLD_HEIGHT - camera.height);
+  const maxCameraX = Math.max(0, worldWidth - camera.width);
+  const maxCameraY = Math.max(0, worldHeight - camera.height);
 
   camera.x = Math.max(0, Math.min(camera.x, maxCameraX));
   camera.y = Math.max(0, Math.min(camera.y, maxCameraY));
@@ -194,10 +225,38 @@ function drawMapFallback() {
 
   ctx.save();
   ctx.translate(-camera.x, -camera.y);
+  const fallbackWidth = worldWidth || canvas.width;
+  const fallbackHeight = worldHeight || canvas.height;
   ctx.fillStyle = '#4a6741';
-  ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+  ctx.fillRect(0, 0, fallbackWidth, fallbackHeight);
   drawPlayer();
   ctx.restore();
+}
+
+function drawWorldMap() {
+  if (scaledWorldMap) {
+    ctx.drawImage(scaledWorldMap, 0, 0);
+    return;
+  }
+
+  if (cityMap) {
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(
+      cityMap,
+      0,
+      0,
+      cityMap.naturalWidth,
+      cityMap.naturalHeight,
+      0,
+      0,
+      worldWidth,
+      worldHeight
+    );
+    return;
+  }
+
+  ctx.fillStyle = '#4a6741';
+  ctx.fillRect(0, 0, worldWidth, worldHeight);
 }
 
 function draw() {
@@ -215,14 +274,8 @@ function draw() {
 
   ctx.save();
   ctx.translate(-camera.x, -camera.y);
-
-  if (cityMap) {
-    ctx.drawImage(cityMap, 0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-  } else {
-    ctx.fillStyle = '#4a6741';
-    ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-  }
-
+  ctx.imageSmoothingEnabled = false;
+  drawWorldMap();
   drawPlayer();
   ctx.restore();
 }
@@ -284,7 +337,7 @@ function togglePauseMenu() {
 }
 
 function isWalkable(x, y) {
-  if (x < 0 || y < 0 || x >= MAP_COLS || y >= MAP_ROWS) {
+  if (x < 0 || y < 0 || x >= mapCols || y >= mapRows) {
     return false;
   }
 
