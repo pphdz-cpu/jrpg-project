@@ -15,9 +15,19 @@
       display: flex;
       justify-content: center;
       align-items: center;
-      background: #1a1a2e;
+      background-image: url('assets/background.png');
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
+      background-color: #1a1a2e;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       color: #f0f0f0;
+    }
+
+    #game-container {
+      background-color: rgba(0, 0, 0, 0.7);
+      padding: 20px;
+      border-radius: 10px;
     }
 
     #map-screen {
@@ -274,6 +284,7 @@
   </style>
 </head>
 <body>
+  <div id="game-container">
   <div id="map-screen">
     <canvas id="gameCanvas" width="400" height="400"></canvas>
 
@@ -343,6 +354,7 @@
         </div>
       </div>
     </div>
+  </div>
   </div>
 
   <script src="characters.js"></script>
