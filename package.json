@@ -1,0 +1,12 @@
+{
+  "name": "tiled-map-generator",
+  "version": "1.0.0",
+  "description": "Generate a Tiled tileset and map from a pixel-art mockup image",
+  "main": "generate-tiled-map.js",
+  "scripts": {
+    "generate": "node generate-tiled-map.js"
+  },
+  "dependencies": {
+    "jimp": "^0.22.12"
+  }
+}
