@@ -57,10 +57,22 @@ const player = {
   isMoving: false,
 };
 
+const CHARACTER_ID = 'char_001';
+
+const pauseMenu = document.getElementById('pause-menu');
+const pauseNameEl = document.getElementById('pause-name');
+const pauseJobEl = document.getElementById('pause-job');
+const pauseHpEl = document.getElementById('pause-hp');
+const pauseSpeedEl = document.getElementById('pause-speed');
+const switchKnightBtn = document.getElementById('switch-knight-btn');
+const switchBlackMageBtn = document.getElementById('switch-black-mage-btn');
+const closeMenuBtn = document.getElementById('close-menu-btn');
+
 const keysHeld = new Set();
 
 let movementEnabled = true;
 let assetsReady = false;
+let isPaused = false;
 
 function getSpriteColX(sheet, col) {
   return Math.round((col * sheet.width) / SPRITE_COLS);
@@ -248,6 +260,54 @@ function draw() {
   drawPlayer();
 }
 
+function isOnMapScreen() {
+  return document.getElementById('map-screen').style.display !== 'none'
+    && document.getElementById('battle-screen').style.display === 'none';
+}
+
+function updatePauseMenuStats() {
+  const character = characters[CHARACTER_ID];
+  const stats = calculateStats(CHARACTER_ID);
+  const job = jobs[character.current_job];
+
+  if (!stats || !job) {
+    return;
+  }
+
+  pauseNameEl.textContent = character.name;
+  pauseJobEl.textContent = job.name;
+  pauseHpEl.textContent = stats.hp;
+  pauseSpeedEl.textContent = stats.speed;
+}
+
+function openPauseMenu() {
+  isPaused = true;
+  updatePauseMenuStats();
+  pauseMenu.style.display = 'block';
+}
+
+function closePauseMenu() {
+  isPaused = false;
+  pauseMenu.style.display = 'none';
+}
+
+function switchJob(jobId) {
+  characters[CHARACTER_ID].current_job = jobId;
+  updatePauseMenuStats();
+}
+
+function togglePauseMenu() {
+  if (!isOnMapScreen() || !movementEnabled) {
+    return;
+  }
+
+  if (isPaused) {
+    closePauseMenu();
+  } else {
+    openPauseMenu();
+  }
+}
+
 function isWalkable(x, y) {
   const tile = map[y][x];
   return tile === 0 || tile === 2 || tile === 3;
@@ -287,6 +347,10 @@ function triggerEncounter() {
 }
 
 function tryRandomEncounter() {
+  if (isPaused) {
+    return;
+  }
+
   if (Math.random() < ENCOUNTER_CHANCE) {
     triggerEncounter();
   }
@@ -313,7 +377,13 @@ window.onBattleVictory = function () {
 };
 
 document.addEventListener('keydown', (event) => {
-  if (!movementEnabled || !isArrowKey(event.key) || keysHeld.has(event.key)) {
+  if (event.key === 'Enter' && isOnMapScreen() && movementEnabled) {
+    togglePauseMenu();
+    event.preventDefault();
+    return;
+  }
+
+  if (!movementEnabled || isPaused || !isArrowKey(event.key) || keysHeld.has(event.key)) {
     return;
   }
 
@@ -352,8 +422,22 @@ document.addEventListener('keyup', (event) => {
   if (keysHeld.size === 0) {
     player.isMoving = false;
     player.currentFrame = 0;
-    draw();
+    if (!isPaused) {
+      draw();
+    }
   }
+});
+
+switchKnightBtn.addEventListener('click', () => {
+  switchJob('job_knight');
+});
+
+switchBlackMageBtn.addEventListener('click', () => {
+  switchJob('job_black_mage');
+});
+
+closeMenuBtn.addEventListener('click', () => {
+  closePauseMenu();
 });
 
 if (!canvas || !ctx) {

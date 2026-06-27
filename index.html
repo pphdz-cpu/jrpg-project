@@ -22,6 +22,7 @@
 
     #map-screen {
       display: block;
+      position: relative;
     }
 
     #map-screen canvas {
@@ -185,11 +186,47 @@
     #enemyAtb::-moz-progress-bar {
       background: linear-gradient(90deg, #aa2a2a, #ff4a4a);
     }
+
+    #pause-menu button {
+      display: block;
+      width: 100%;
+      margin-top: 10px;
+      padding: 10px 16px;
+      font-size: 1rem;
+      cursor: pointer;
+      background: #3a5a8a;
+      color: #fff;
+      border: 2px solid #5a8aba;
+      border-radius: 6px;
+    }
+
+    #pause-menu button:hover {
+      background: #4a7aba;
+    }
+
+    #pause-menu h2 {
+      margin-top: 0;
+    }
+
+    #pause-menu p {
+      margin: 8px 0;
+    }
   </style>
 </head>
 <body>
   <div id="map-screen">
     <canvas id="gameCanvas" width="400" height="400"></canvas>
+
+    <div id="pause-menu" style="display: none; position: absolute; z-index: 10; background: black; color: white; padding: 20px; top: 0; left: 0; width: 100%; box-sizing: border-box;">
+      <h2>Pause Menu</h2>
+      <p>Name: <span id="pause-name">Bartz</span></p>
+      <p>Current Job: <span id="pause-job">Knight</span></p>
+      <p>HP: <span id="pause-hp">120</span></p>
+      <p>Speed: <span id="pause-speed">10</span></p>
+      <button id="switch-knight-btn" type="button">Switch to Knight</button>
+      <button id="switch-black-mage-btn" type="button">Switch to Black Mage</button>
+      <button id="close-menu-btn" type="button">Close Menu</button>
+    </div>
   </div>
 
   <div id="battle-screen" style="display: none;">
