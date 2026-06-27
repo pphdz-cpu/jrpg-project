@@ -4,14 +4,17 @@ const ctx = canvas.getContext('2d');
 const TILE_SIZE = 40;
 const MAP_SIZE = 10;
 const ENCOUNTER_CHANCE = 0.15;
+const SPRITE_COLS = 4;
+const SPRITE_ROWS = 4;
 
-const ASSET_PATHS = {
+const TERRAIN_ASSETS = {
   grass: 'assets/grass.png',
   forest: 'assets/forest.png',
   path: 'assets/path.png',
   town: 'assets/town.png',
-  character: 'assets/character.png',
 };
+
+const CHARACTER_SHEET_PATH = 'assets/character_sheet.png';
 
 const TILE_TO_ASSET = {
   0: 'grass',
@@ -21,6 +24,7 @@ const TILE_TO_ASSET = {
 };
 
 const cachedTiles = {};
+let characterSheet = null;
 
 const map = [
   [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
@@ -38,6 +42,9 @@ const map = [
 const player = {
   x: 1,
   y: 1,
+  direction: 0,
+  currentFrame: 0,
+  isMoving: false,
 };
 
 let movementEnabled = true;
@@ -65,7 +72,6 @@ function cacheFallbackTile(key) {
     forest: '#2e5a2e',
     path: '#c4a35a',
     town: '#8b6914',
-    character: '#2196f3',
   };
   offCtx.fillStyle = colors[key];
   offCtx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
@@ -74,35 +80,77 @@ function cacheFallbackTile(key) {
 }
 
 function preloadAssets(onComplete) {
-  const keys = Object.keys(ASSET_PATHS);
+  const terrainKeys = Object.keys(TERRAIN_ASSETS);
   let loadedCount = 0;
+  const totalAssets = terrainKeys.length + 1;
 
-  keys.forEach((key) => {
+  function checkComplete() {
+    loadedCount += 1;
+
+    if (loadedCount === totalAssets) {
+      assetsReady = true;
+      onComplete();
+    }
+  }
+
+  terrainKeys.forEach((key) => {
     const image = new Image();
 
     image.onload = () => {
       cacheImage(key, image);
-      loadedCount += 1;
-
-      if (loadedCount === keys.length) {
-        assetsReady = true;
-        onComplete();
-      }
+      checkComplete();
     };
 
     image.onerror = () => {
-      console.error(`Failed to load asset: ${ASSET_PATHS[key]}`);
+      console.error(`Failed to load asset: ${TERRAIN_ASSETS[key]}`);
       cacheFallbackTile(key);
-      loadedCount += 1;
-
-      if (loadedCount === keys.length) {
-        assetsReady = true;
-        onComplete();
-      }
+      checkComplete();
     };
 
-    image.src = ASSET_PATHS[key];
+    image.src = TERRAIN_ASSETS[key];
   });
+
+  const sheet = new Image();
+
+  sheet.onload = () => {
+    characterSheet = sheet;
+    checkComplete();
+  };
+
+  sheet.onerror = () => {
+    console.error(`Failed to load asset: ${CHARACTER_SHEET_PATH}`);
+    checkComplete();
+  };
+
+  sheet.src = CHARACTER_SHEET_PATH;
+}
+
+function drawPlayer() {
+  const drawX = player.x * TILE_SIZE;
+  const drawY = player.y * TILE_SIZE;
+
+  if (!characterSheet) {
+    ctx.fillStyle = '#2196f3';
+    ctx.fillRect(drawX, drawY, TILE_SIZE, TILE_SIZE);
+    return;
+  }
+
+  const frameWidth = characterSheet.width / SPRITE_COLS;
+  const frameHeight = characterSheet.height / SPRITE_ROWS;
+  const sourceX = player.currentFrame * frameWidth;
+  const sourceY = player.direction * frameHeight;
+
+  ctx.drawImage(
+    characterSheet,
+    sourceX,
+    sourceY,
+    frameWidth,
+    frameHeight,
+    drawX,
+    drawY,
+    TILE_SIZE,
+    TILE_SIZE
+  );
 }
 
 function draw() {
@@ -124,16 +172,31 @@ function draw() {
     }
   }
 
-  ctx.drawImage(
-    cachedTiles.character,
-    player.x * TILE_SIZE,
-    player.y * TILE_SIZE
-  );
+  drawPlayer();
 }
 
 function isWalkable(x, y) {
   const tile = map[y][x];
   return tile === 0 || tile === 2 || tile === 3;
+}
+
+function setPlayerDirection(key) {
+  switch (key) {
+    case 'ArrowDown':
+      player.direction = 0;
+      break;
+    case 'ArrowLeft':
+      player.direction = 1;
+      break;
+    case 'ArrowRight':
+      player.direction = 2;
+      break;
+    case 'ArrowUp':
+      player.direction = 3;
+      break;
+    default:
+      break;
+  }
 }
 
 function triggerEncounter() {
@@ -156,9 +219,12 @@ function movePlayer(dx, dy) {
   if (isWalkable(newX, newY)) {
     player.x = newX;
     player.y = newY;
-    draw();
+    player.currentFrame = (player.currentFrame + 1) % SPRITE_COLS;
     tryRandomEncounter();
+    return true;
   }
+
+  return false;
 }
 
 window.onBattleVictory = function () {
@@ -173,22 +239,49 @@ document.addEventListener('keydown', (event) => {
 
   switch (event.key) {
     case 'ArrowUp':
+      player.isMoving = true;
+      setPlayerDirection(event.key);
       movePlayer(0, -1);
+      draw();
       break;
     case 'ArrowDown':
+      player.isMoving = true;
+      setPlayerDirection(event.key);
       movePlayer(0, 1);
+      draw();
       break;
     case 'ArrowLeft':
+      player.isMoving = true;
+      setPlayerDirection(event.key);
       movePlayer(-1, 0);
+      draw();
       break;
     case 'ArrowRight':
+      player.isMoving = true;
+      setPlayerDirection(event.key);
       movePlayer(1, 0);
+      draw();
       break;
     default:
       return;
   }
 
   event.preventDefault();
+});
+
+document.addEventListener('keyup', (event) => {
+  switch (event.key) {
+    case 'ArrowUp':
+    case 'ArrowDown':
+    case 'ArrowLeft':
+    case 'ArrowRight':
+      player.isMoving = false;
+      player.currentFrame = 0;
+      draw();
+      break;
+    default:
+      break;
+  }
 });
 
 if (!canvas || !ctx) {
