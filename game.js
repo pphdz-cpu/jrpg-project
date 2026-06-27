@@ -5,8 +5,8 @@ if (ctx) {
   ctx.imageSmoothingEnabled = false;
 }
 
-const TILE_SIZE = 40;
 const MAP_SIZE = 10;
+const TILE_SIZE = canvas ? canvas.width / MAP_SIZE : 80;
 const ENCOUNTER_CHANCE = 0.15;
 const WALK_FRAMES = 4;
 

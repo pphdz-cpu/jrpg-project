@@ -16,10 +16,12 @@
       justify-content: center;
       align-items: center;
       background-image: url('assets/background.png');
-      background-size: cover;
-      background-position: center;
+      background-size: 100% auto;
+      background-position: top center;
       background-attachment: fixed;
+      background-repeat: no-repeat;
       background-color: #1a1a2e;
+      image-rendering: pixelated;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       color: #f0f0f0;
     }
@@ -37,6 +39,8 @@
 
     #map-screen canvas {
       display: block;
+      width: min(80vmin, 800px);
+      height: min(80vmin, 800px);
       background: #2e7d32;
       border: 2px solid #fff;
       image-rendering: pixelated;
@@ -286,7 +290,7 @@
 <body>
   <div id="game-container">
   <div id="map-screen">
-    <canvas id="gameCanvas" width="400" height="400"></canvas>
+    <canvas id="gameCanvas" width="800" height="800"></canvas>
 
     <div id="pause-menu" style="display: none; position: absolute; z-index: 10; background: black; color: white; padding: 20px; bottom: 0; left: 0; width: 100%; box-sizing: border-box;">
       <h2>Pause Menu</h2>
