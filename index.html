@@ -111,7 +111,8 @@
       margin-bottom: 24px;
     }
 
-    #attackBtn {
+    #attackBtn,
+    #magicBtn {
       padding: 12px 32px;
       font-size: 1rem;
       font-weight: bold;
@@ -123,15 +124,65 @@
       letter-spacing: 0.05em;
     }
 
-    #attackBtn:disabled {
+    #attackBtn:disabled,
+    #magicBtn:disabled {
       background: #2a2a3a;
       color: #666;
       border-color: #444;
       cursor: not-allowed;
     }
 
-    #attackBtn:not(:disabled):hover {
+    #attackBtn:not(:disabled):hover,
+    #magicBtn:not(:disabled):hover {
       background: #4a7aba;
+    }
+
+    .party-status {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .party-member {
+      background: rgba(0, 0, 0, 0.35);
+      border: 2px solid #4a7a9a;
+      border-radius: 8px;
+      padding: 12px 16px;
+    }
+
+    .party-member.active {
+      border-color: #ffd54f;
+      box-shadow: 0 0 12px rgba(255, 213, 79, 0.45);
+      background: rgba(74, 122, 154, 0.35);
+    }
+
+    .party-member.dead {
+      opacity: 0.45;
+    }
+
+    .party-member-name {
+      font-weight: bold;
+      color: #88ccff;
+      margin-bottom: 6px;
+    }
+
+    .party-member-stats {
+      font-size: 0.95rem;
+      color: #ccc;
+      margin-bottom: 8px;
+    }
+
+    .party-member-stats span {
+      color: #fff;
+      font-weight: bold;
+    }
+
+    #battleMessage {
+      min-height: 1.25rem;
+      color: #ffd54f;
+      font-size: 0.95rem;
+      margin-bottom: 12px;
     }
 
     .atb-section {
@@ -165,7 +216,8 @@
       border-radius: 4px;
     }
 
-    #playerAtb::-webkit-progress-value {
+    #bartzAtb::-webkit-progress-value,
+    #lennaAtb::-webkit-progress-value {
       background: linear-gradient(90deg, #2a6aaa, #4a9aff);
       border-radius: 4px;
     }
@@ -179,7 +231,8 @@
       border-radius: 4px;
     }
 
-    #playerAtb::-moz-progress-bar {
+    #bartzAtb::-moz-progress-bar,
+    #lennaAtb::-moz-progress-bar {
       background: linear-gradient(90deg, #2a6aaa, #4a9aff);
     }
 
@@ -243,23 +296,46 @@
           <div class="combatant-name" id="enemyName">Goblin</div>
           <div class="combatant-hp">HP: <span id="enemyHp">50</span></div>
         </div>
-        <div class="combatant player">
-          <div class="combatant-name" id="playerName">Bartz</div>
-          <div class="combatant-hp">HP: <span id="playerHp">120</span></div>
-        </div>
       </div>
 
       <div class="ui-menu">
+        <div class="menu-title">Party Status</div>
+        <div class="party-status">
+          <div class="party-member" id="party-bartz">
+            <div class="party-member-name" id="bartzName">Bartz</div>
+            <div class="party-member-stats">
+              HP: <span id="bartzHp">120/120</span>
+              &nbsp;|&nbsp;
+              MP: <span id="bartzMp">5/5</span>
+            </div>
+            <div class="atb-row">
+              <span class="atb-label">ATB</span>
+              <progress id="bartzAtb" max="100" value="0"></progress>
+            </div>
+          </div>
+
+          <div class="party-member" id="party-lenna">
+            <div class="party-member-name" id="lennaName">Lenna</div>
+            <div class="party-member-stats">
+              HP: <span id="lennaHp">90/90</span>
+              &nbsp;|&nbsp;
+              MP: <span id="lennaMp">35/35</span>
+            </div>
+            <div class="atb-row">
+              <span class="atb-label">ATB</span>
+              <progress id="lennaAtb" max="100" value="0"></progress>
+            </div>
+          </div>
+        </div>
+
         <div class="menu-title">Commands</div>
+        <div id="battleMessage"></div>
         <div class="command-row">
           <button id="attackBtn" disabled>Attack</button>
+          <button id="magicBtn" disabled>Magic</button>
         </div>
 
         <div class="atb-section">
-          <div class="atb-row">
-            <span class="atb-label">Player</span>
-            <progress id="playerAtb" max="100" value="0"></progress>
-          </div>
           <div class="atb-row">
             <span class="atb-label">Enemy</span>
             <progress id="enemyAtb" max="100" value="0"></progress>

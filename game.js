@@ -79,6 +79,8 @@ const player = {
   isMoving: false,
 };
 
+const CHARACTER_ID = 'char_001';
+
 const pauseMenu = document.getElementById('pause-menu');
 const pauseNameEl = document.getElementById('pause-name');
 const pauseJobEl = document.getElementById('pause-job');

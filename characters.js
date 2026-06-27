@@ -16,4 +16,20 @@ const characters = {
       job_knight: 120,
     },
   },
+  char_002: {
+    name: 'Lenna',
+    level: 1,
+    base_stats: {
+      hp: 100,
+      mp: 20,
+      strength: 8,
+      magic: 14,
+      speed: 10,
+    },
+    current_job: 'job_white_mage',
+    secondary_ability: 'cure',
+    job_points_earned: {
+      job_white_mage: 80,
+    },
+  },
 };
