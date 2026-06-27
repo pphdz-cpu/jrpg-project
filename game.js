@@ -7,8 +7,17 @@ const ENCOUNTER_CHANCE = 0.15;
 
 const ASSET_PATHS = {
   grass: 'assets/grass.png',
-  wall: 'assets/wall.png',
-  player: 'assets/player.png',
+  forest: 'assets/forest.png',
+  path: 'assets/path.png',
+  town: 'assets/town.png',
+  character: 'assets/character.png',
+};
+
+const TILE_TO_ASSET = {
+  0: 'grass',
+  1: 'forest',
+  2: 'path',
+  3: 'town',
 };
 
 const cachedTiles = {};
@@ -16,13 +25,13 @@ const cachedTiles = {};
 const map = [
   [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
   [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+  [1, 0, 2, 2, 2, 2, 2, 0, 0, 1],
+  [1, 0, 0, 0, 0, 0, 2, 0, 0, 1],
+  [1, 0, 0, 0, 0, 0, 2, 0, 0, 1],
+  [1, 0, 0, 0, 0, 2, 2, 0, 0, 1],
+  [1, 0, 0, 0, 0, 2, 0, 0, 0, 1],
+  [1, 0, 0, 0, 0, 2, 2, 2, 0, 1],
+  [1, 0, 0, 0, 0, 0, 0, 2, 3, 1],
   [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
 ];
 
@@ -51,7 +60,13 @@ function cacheFallbackTile(key) {
   offscreen.height = TILE_SIZE;
 
   const offCtx = offscreen.getContext('2d');
-  const colors = { grass: '#4caf50', wall: '#888888', player: '#2196f3' };
+  const colors = {
+    grass: '#4caf50',
+    forest: '#2e5a2e',
+    path: '#c4a35a',
+    town: '#8b6914',
+    character: '#2196f3',
+  };
   offCtx.fillStyle = colors[key];
   offCtx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
 
@@ -100,7 +115,7 @@ function draw() {
   for (let row = 0; row < MAP_SIZE; row++) {
     for (let col = 0; col < MAP_SIZE; col++) {
       const tile = map[row][col];
-      const tileKey = tile === 0 ? 'grass' : 'wall';
+      const tileKey = TILE_TO_ASSET[tile];
       ctx.drawImage(
         cachedTiles[tileKey],
         col * TILE_SIZE,
@@ -110,14 +125,15 @@ function draw() {
   }
 
   ctx.drawImage(
-    cachedTiles.player,
+    cachedTiles.character,
     player.x * TILE_SIZE,
     player.y * TILE_SIZE
   );
 }
 
 function isWalkable(x, y) {
-  return map[y][x] === 0;
+  const tile = map[y][x];
+  return tile === 0 || tile === 2 || tile === 3;
 }
 
 function triggerEncounter() {
