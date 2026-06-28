@@ -5,44 +5,32 @@ if (ctx) {
   ctx.imageSmoothingEnabled = false;
 }
 
-const tileSize = 40;
 const ENCOUNTER_CHANCE = 0.15;
 const WALK_FRAMES = 4;
-
-const TILESET_PATH = 'assets/tileset.png';
 const CHARACTER_SHEET_PATH = 'assets/character_sheet.png';
 const CHARACTER_FALLBACK_PATH = 'assets/character.png';
 
-// Placeholder tile map — replace with a Tiled export later.
-// Each value is a tile index into tileset.png (0 = top-left tile).
-const map = Array.from({ length: 40 }, (_, row) => (
-  Array.from({ length: 25 }, (_, col) => {
-    if (row === 0 || row === 39 || col === 0 || col === 24) {
-      return 1;
-    }
+const level = window.TILED_LEVEL;
+const SOURCE_TILE_SIZE = level ? level.tileWidth : 16;
+const tileSize = level ? level.displayTileSize : 32;
 
-    return 0;
-  })
-));
-
+const map = level ? level.layer : [];
 const mapRows = map.length;
-const mapCols = map[0].length;
+const mapCols = map[0] ? map[0].length : 0;
 const worldWidth = mapCols * tileSize;
 const worldHeight = mapRows * tileSize;
 
-function createCollisionMap(cols, rows) {
-  return Array.from({ length: rows }, () => Array(cols).fill(0));
-}
-
-const collisionMap = createCollisionMap(mapCols, mapRows);
-
-for (let row = 0; row < mapRows; row += 1) {
-  for (let col = 0; col < mapCols; col += 1) {
-    if (map[row][col] === 1) {
-      collisionMap[row][col] = 1;
-    }
-  }
-}
+const collisionTileIds = new Set(level ? level.collisionTileIds : []);
+const damageTileIds = new Set(level ? level.damageTileIds : []);
+const tilesetColumns = level ? level.tilesetColumns : 1;
+const tilesetFirstGid = level ? level.firstGid : 1;
+const TILESET_PATH = level ? level.tileset : 'assets/map-tileset.png';
+const entityFootprintWidth = level && level.entityWidth ? level.entityWidth : SOURCE_TILE_SIZE;
+const entityFootprintHeight = level && level.entityHeight ? level.entityHeight : SOURCE_TILE_SIZE;
+const entityVisualHeight = level && level.entityVisualHeight ? level.entityVisualHeight : SOURCE_TILE_SIZE * 2;
+const mapOffsetX = level && level.offsetX ? level.offsetX : 0;
+const mapOffsetY = level && level.offsetY ? level.offsetY : 0;
+const displayScale = tileSize / SOURCE_TILE_SIZE;
 
 const SPRITE_FRAMES = {
   0: [
@@ -72,7 +60,6 @@ const SPRITE_FRAMES = {
 };
 
 let tilesetImage = null;
-let tilesPerRow = 0;
 let characterSheet = null;
 
 const camera = {
@@ -82,9 +69,24 @@ const camera = {
   height: canvas ? canvas.height : 800,
 };
 
+function getInitialPlayerPosition() {
+  const spawn = level && level.spawns && level.spawns.find((entry) => entry.name === 'PlayerSpawn');
+
+  if (spawn) {
+    return {
+      x: Math.floor((spawn.x - mapOffsetX) / SOURCE_TILE_SIZE),
+      y: Math.floor((spawn.y - mapOffsetY) / SOURCE_TILE_SIZE),
+    };
+  }
+
+  return { x: 1, y: 1 };
+}
+
+const initialPlayerPosition = getInitialPlayerPosition();
+
 const player = {
-  x: 1,
-  y: 1,
+  x: initialPlayerPosition.x,
+  y: initialPlayerPosition.y,
   direction: 0,
   currentFrame: 0,
   isMoving: false,
@@ -116,7 +118,21 @@ function loadImage(src) {
   });
 }
 
+function gidToLocalTileId(gid) {
+  if (!gid) {
+    return -1;
+  }
+
+  return gid - tilesetFirstGid;
+}
+
 function preloadAssets(onComplete) {
+  if (!level) {
+    console.error('Missing window.TILED_LEVEL. Run: npm run build:map');
+    onComplete();
+    return;
+  }
+
   let loadedCount = 0;
   const totalAssets = 2;
 
@@ -132,7 +148,6 @@ function preloadAssets(onComplete) {
   loadImage(TILESET_PATH)
     .then((image) => {
       tilesetImage = image;
-      tilesPerRow = Math.floor(image.width / tileSize);
     })
     .catch(() => {
       console.error(`Failed to load asset: ${TILESET_PATH}`);
@@ -173,12 +188,21 @@ function updateCamera() {
 }
 
 function drawPlayer() {
-  const drawX = player.x * tileSize;
-  const drawY = player.y * tileSize;
+  const drawWidth = entityFootprintWidth * displayScale;
+  const drawHeight = entityVisualHeight * displayScale;
+  const drawX = player.x * tileSize + (tileSize - drawWidth) / 2;
+  const drawY = player.y * tileSize + tileSize - drawHeight;
 
   if (!characterSheet) {
     ctx.fillStyle = '#1565c0';
-    ctx.fillRect(drawX, drawY, tileSize, tileSize);
+    ctx.fillRect(drawX, drawY, drawWidth, drawHeight);
+    ctx.strokeStyle = '#ffffff';
+    ctx.strokeRect(
+      player.x * tileSize,
+      player.y * tileSize + tileSize - entityFootprintHeight * displayScale,
+      entityFootprintWidth * displayScale,
+      entityFootprintHeight * displayScale
+    );
     return;
   }
 
@@ -187,7 +211,7 @@ function drawPlayer() {
 
   if (!rect) {
     ctx.fillStyle = '#1565c0';
-    ctx.fillRect(drawX, drawY, tileSize, tileSize);
+    ctx.fillRect(drawX, drawY, drawWidth, drawHeight);
     return;
   }
 
@@ -199,31 +223,26 @@ function drawPlayer() {
     rect.sh,
     drawX,
     drawY,
-    tileSize,
-    tileSize
+    drawWidth,
+    drawHeight
   );
 }
 
-function drawMapFallback() {
+function drawMapFallback(message) {
   if (!ctx) {
     return;
   }
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  updateCamera();
-
-  ctx.save();
-  ctx.translate(-camera.x, -camera.y);
-  const fallbackWidth = worldWidth || canvas.width;
-  const fallbackHeight = worldHeight || canvas.height;
-  ctx.fillStyle = '#4a6741';
-  ctx.fillRect(0, 0, fallbackWidth, fallbackHeight);
-  drawPlayer();
-  ctx.restore();
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#ffd54f';
+  ctx.font = '18px Segoe UI, sans-serif';
+  ctx.fillText(message || 'Loading map...', 24, 40);
 }
 
 function drawTileMap() {
-  if (!tilesetImage || tilesPerRow === 0) {
+  if (!tilesetImage) {
     ctx.fillStyle = '#4a6741';
     ctx.fillRect(0, 0, worldWidth, worldHeight);
     return;
@@ -231,9 +250,15 @@ function drawTileMap() {
 
   for (let row = 0; row < mapRows; row += 1) {
     for (let col = 0; col < mapCols; col += 1) {
-      const tileNumber = map[row][col];
-      const sx = (tileNumber % tilesPerRow) * tileSize;
-      const sy = Math.floor(tileNumber / tilesPerRow) * tileSize;
+      const gid = map[row][col];
+      const localTileId = gidToLocalTileId(gid);
+
+      if (localTileId < 0) {
+        continue;
+      }
+
+      const sx = (localTileId % tilesetColumns) * SOURCE_TILE_SIZE;
+      const sy = Math.floor(localTileId / tilesetColumns) * SOURCE_TILE_SIZE;
       const destX = col * tileSize;
       const destY = row * tileSize;
 
@@ -241,8 +266,8 @@ function drawTileMap() {
         tilesetImage,
         sx,
         sy,
-        tileSize,
-        tileSize,
+        SOURCE_TILE_SIZE,
+        SOURCE_TILE_SIZE,
         destX,
         destY,
         tileSize,
@@ -257,8 +282,13 @@ function draw() {
     return;
   }
 
+  if (!level) {
+    drawMapFallback('Map data missing. Run: npm run build:map');
+    return;
+  }
+
   if (!assetsReady) {
-    drawMapFallback();
+    drawMapFallback('Loading map assets...');
     return;
   }
 
@@ -334,7 +364,18 @@ function isWalkable(x, y) {
     return false;
   }
 
-  return collisionMap[y][x] === 0;
+  const gid = map[y][x];
+  const localTileId = gidToLocalTileId(gid);
+
+  if (localTileId < 0) {
+    return false;
+  }
+
+  if (collisionTileIds.has(localTileId)) {
+    return false;
+  }
+
+  return true;
 }
 
 function setPlayerDirection(key) {
@@ -373,6 +414,14 @@ function triggerEncounter() {
 
 function tryRandomEncounter() {
   if (isPaused) {
+    return;
+  }
+
+  const gid = map[player.y][player.x];
+  const localTileId = gidToLocalTileId(gid);
+
+  if (damageTileIds.has(localTileId)) {
+    triggerEncounter();
     return;
   }
 
@@ -481,7 +530,7 @@ function initGame() {
   }
 
   initPauseMenu();
-  drawMapFallback();
+  drawMapFallback('Loading map assets...');
   preloadAssets(draw);
 }
 
