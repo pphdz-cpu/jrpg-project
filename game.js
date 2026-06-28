@@ -25,6 +25,12 @@ const damageTileIds = new Set(level ? level.damageTileIds : []);
 const tilesetColumns = level ? level.tilesetColumns : 1;
 const tilesetFirstGid = level ? level.firstGid : 1;
 const TILESET_PATH = level ? level.tileset : 'assets/map-tileset.png';
+const entityFootprintWidth = level && level.entityWidth ? level.entityWidth : SOURCE_TILE_SIZE;
+const entityFootprintHeight = level && level.entityHeight ? level.entityHeight : SOURCE_TILE_SIZE;
+const entityVisualHeight = level && level.entityVisualHeight ? level.entityVisualHeight : SOURCE_TILE_SIZE * 2;
+const mapOffsetX = level && level.offsetX ? level.offsetX : 0;
+const mapOffsetY = level && level.offsetY ? level.offsetY : 0;
+const displayScale = tileSize / SOURCE_TILE_SIZE;
 
 const SPRITE_FRAMES = {
   0: [
@@ -68,8 +74,8 @@ function getInitialPlayerPosition() {
 
   if (spawn) {
     return {
-      x: Math.floor(spawn.x / SOURCE_TILE_SIZE),
-      y: Math.floor(spawn.y / SOURCE_TILE_SIZE),
+      x: Math.floor((spawn.x - mapOffsetX) / SOURCE_TILE_SIZE),
+      y: Math.floor((spawn.y - mapOffsetY) / SOURCE_TILE_SIZE),
     };
   }
 
@@ -77,11 +83,6 @@ function getInitialPlayerPosition() {
 }
 
 const initialPlayerPosition = getInitialPlayerPosition();
-const spawnTiles = new Set(
-  (level && level.spawns ? level.spawns : []).map(
-    (spawn) => `${Math.floor(spawn.x / SOURCE_TILE_SIZE)},${Math.floor(spawn.y / SOURCE_TILE_SIZE)}`
-  )
-);
 
 const player = {
   x: initialPlayerPosition.x,
@@ -187,12 +188,21 @@ function updateCamera() {
 }
 
 function drawPlayer() {
-  const drawX = player.x * tileSize;
-  const drawY = player.y * tileSize;
+  const drawWidth = entityFootprintWidth * displayScale;
+  const drawHeight = entityVisualHeight * displayScale;
+  const drawX = player.x * tileSize + (tileSize - drawWidth) / 2;
+  const drawY = player.y * tileSize + tileSize - drawHeight;
 
   if (!characterSheet) {
     ctx.fillStyle = '#1565c0';
-    ctx.fillRect(drawX, drawY, tileSize, tileSize);
+    ctx.fillRect(drawX, drawY, drawWidth, drawHeight);
+    ctx.strokeStyle = '#ffffff';
+    ctx.strokeRect(
+      player.x * tileSize,
+      player.y * tileSize + tileSize - entityFootprintHeight * displayScale,
+      entityFootprintWidth * displayScale,
+      entityFootprintHeight * displayScale
+    );
     return;
   }
 
@@ -201,7 +211,7 @@ function drawPlayer() {
 
   if (!rect) {
     ctx.fillStyle = '#1565c0';
-    ctx.fillRect(drawX, drawY, tileSize, tileSize);
+    ctx.fillRect(drawX, drawY, drawWidth, drawHeight);
     return;
   }
 
@@ -213,8 +223,8 @@ function drawPlayer() {
     rect.sh,
     drawX,
     drawY,
-    tileSize,
-    tileSize
+    drawWidth,
+    drawHeight
   );
 }
 
@@ -349,17 +359,9 @@ function togglePauseMenu() {
   }
 }
 
-function isPlayerSpawnTile(x, y) {
-  return spawnTiles.has(`${x},${y}`);
-}
-
 function isWalkable(x, y) {
   if (x < 0 || y < 0 || x >= mapCols || y >= mapRows) {
     return false;
-  }
-
-  if (isPlayerSpawnTile(x, y)) {
-    return true;
   }
 
   const gid = map[y][x];
