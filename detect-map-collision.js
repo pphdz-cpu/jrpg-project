@@ -51,8 +51,43 @@ function isDirtPixel(r, g, b) {
   );
 }
 
+function isStoneStepPixel(r, g, b) {
+  return (
+    r >= 95
+    && r <= 145
+    && g >= 68
+    && g <= 118
+    && b >= 52
+    && b <= 108
+    && r > g
+    && g > b
+  );
+}
+
+function isDarkStepPixel(r, g, b) {
+  return (
+    r >= 45
+    && r <= 115
+    && g >= 22
+    && g <= 75
+    && b >= 15
+    && b <= 60
+    && r > g
+    && g >= b - 8
+  );
+}
+
+function isStepPixel(r, g, b) {
+  return isStoneStepPixel(r, g, b) || isDarkStepPixel(r, g, b);
+}
+
 function isFloorPixel(r, g, b) {
-  return isGrassPixel(r, g, b) || isPathPixel(r, g, b) || isDirtPixel(r, g, b);
+  return (
+    isGrassPixel(r, g, b)
+    || isPathPixel(r, g, b)
+    || isDirtPixel(r, g, b)
+    || isStepPixel(r, g, b)
+  );
 }
 
 function isWaterPixel(r, g, b) {
@@ -60,6 +95,10 @@ function isWaterPixel(r, g, b) {
 }
 
 function isTreeTrunkPixel(r, g, b) {
+  if (isStepPixel(r, g, b)) {
+    return false;
+  }
+
   return r > 70 && r < 150 && g > 30 && g < 100 && b < 70 && r > g + 10;
 }
 
@@ -138,6 +177,9 @@ function classifyPixel(r, g, b) {
   if (isDirtPixel(r, g, b)) {
     return 'floor';
   }
+  if (isStepPixel(r, g, b)) {
+    return 'floor';
+  }
   if (isWaterPixel(r, g, b)) {
     return 'water';
   }
@@ -212,6 +254,8 @@ function analyzeTile(mockup, logic, col, row, offsetX, offsetY) {
         counts.path += 1;
       } else if (isDirtPixel(r, g, b)) {
         counts.dirt += 1;
+      } else if (isStepPixel(r, g, b)) {
+        counts.dirt += 1;
       } else if (isWaterPixel(r, g, b)) {
         counts.water += 1;
       } else if (isCharacterPixel(r, g, b)) {
@@ -237,8 +281,35 @@ function hasWalkableFloor(band) {
   return band.floor >= 18;
 }
 
+function isStairTile(feet, upper) {
+  return (
+    feet.floor >= 20
+    && upper.floor >= 24
+    && feet.water < 8
+    && feet.wall < 20
+    && feet.roof < 20
+    && feet.character < 16
+    && feet.trunk < 16
+  );
+}
+
+function hasOverheadFoliage(upper) {
+  return (
+    upper.canopy >= 8
+    || upper.trunk >= 12
+    || upper.roof >= 12
+    || upper.wall >= 12
+    || upper.wood >= 14
+    || upper.logicBlue >= 8
+  );
+}
+
 function isCanopyWalkable(analysis) {
   const { feet, upper } = analysis;
+
+  if (isStairTile(feet, upper)) {
+    return false;
+  }
 
   if (feet.water >= 8 || feet.wall >= 16 || feet.roof >= 16 || feet.wood >= 18) {
     return false;
@@ -258,8 +329,7 @@ function isCanopyWalkable(analysis) {
     return false;
   }
 
-  const overhead = upper.trunk + upper.canopy + upper.roof + upper.wall + upper.wood + upper.other;
-  return overhead >= 12 || upper.canopy >= 8 || upper.logicBlue >= 8;
+  return hasOverheadFoliage(upper);
 }
 
 function isEnvironmentBlocked(analysis) {
@@ -269,19 +339,11 @@ function isEnvironmentBlocked(analysis) {
     return false;
   }
 
-  if (isCanopyWalkable(analysis)) {
-    return false;
-  }
-
-  if (feet.floor >= 28 && feet.floor >= feet.trunk && feet.water < 8 && feet.wall < 16 && feet.wood < 18) {
+  if (isStairTile(feet, upper)) {
     return false;
   }
 
   if (feet.water >= 8 || counts.water >= 20) {
-    return true;
-  }
-
-  if (feet.trunk >= 8) {
     return true;
   }
 
@@ -295,6 +357,25 @@ function isEnvironmentBlocked(analysis) {
 
   if (feet.character >= 28) {
     return true;
+  }
+
+  if (feet.trunk >= 8 && !isStairTile(feet, upper)) {
+    return true;
+  }
+
+  if (isCanopyWalkable(analysis)) {
+    return false;
+  }
+
+  if (
+    feet.floor >= 28
+    && feet.floor >= feet.trunk
+    && feet.water < 8
+    && feet.wall < 16
+    && feet.wood < 18
+    && feet.character < 16
+  ) {
+    return false;
   }
 
   if (feet.logicBlue >= 10) {

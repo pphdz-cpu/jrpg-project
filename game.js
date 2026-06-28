@@ -261,18 +261,6 @@ function drawTileMap() {
   }
 }
 
-function shouldSplitCanopyTile(col, row) {
-  if (!overheadCells || !overheadCells[row] || !overheadCells[row][col]) {
-    return false;
-  }
-
-  if (player.x === col && player.y === row) {
-    return false;
-  }
-
-  return shouldDrawCanopyOverPlayer(col, row);
-}
-
 function shouldDrawCanopyOverPlayer(col, row) {
   if (!overheadCells || !overheadCells[row] || !overheadCells[row][col]) {
     return false;
@@ -281,7 +269,16 @@ function shouldDrawCanopyOverPlayer(col, row) {
   const rowDistance = player.y - row;
   const colDistance = Math.abs(player.x - col);
 
-  return colDistance <= 1 && rowDistance >= 0 && rowDistance <= 2;
+  // Only draw canopy from tiles north of the player so it does not cover their sprite.
+  return colDistance <= 1 && rowDistance >= 1 && rowDistance <= 3;
+}
+
+function shouldSplitCanopyTile(col, row) {
+  if (!overheadCells || !overheadCells[row] || !overheadCells[row][col]) {
+    return false;
+  }
+
+  return shouldDrawCanopyOverPlayer(col, row);
 }
 
 function drawOverheadCanopies() {

@@ -103,8 +103,8 @@ function getSpriteFrameRect(direction, meta, options = {}) {
 
 function getDrawDimensions(rect, meta, tileSize, sourceTileSize) {
   const pixelScale = tileSize / sourceTileSize;
-  const targetHeight = Math.round(meta.visualHeight * pixelScale);
-  const targetWidth = Math.round(targetHeight * (rect.sw / rect.sh));
+  const targetHeight = Math.round(meta.frameHeight * pixelScale);
+  const targetWidth = Math.round(meta.frameWidth * pixelScale);
 
   return {
     targetWidth,
