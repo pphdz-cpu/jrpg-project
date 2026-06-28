@@ -5,75 +5,34 @@ if (ctx) {
   ctx.imageSmoothingEnabled = false;
 }
 
-const tileSize = 40;
 const ENCOUNTER_CHANCE = 0.15;
-const WALK_FRAMES = 4;
 
-const TILESET_PATH = 'assets/tileset.png';
-const CHARACTER_SHEET_PATH = 'assets/character_sheet.png';
-const CHARACTER_FALLBACK_PATH = 'assets/character.png';
+const level = window.TILED_LEVEL;
+const SOURCE_TILE_SIZE = level ? level.tileWidth : 16;
+const tileSize = level ? level.displayTileSize : 32;
 
-// Placeholder tile map — replace with a Tiled export later.
-// Each value is a tile index into tileset.png (0 = top-left tile).
-const map = Array.from({ length: 40 }, (_, row) => (
-  Array.from({ length: 25 }, (_, col) => {
-    if (row === 0 || row === 39 || col === 0 || col === 24) {
-      return 1;
-    }
-
-    return 0;
-  })
-));
-
+const map = level ? level.layer : [];
 const mapRows = map.length;
-const mapCols = map[0].length;
+const mapCols = map[0] ? map[0].length : 0;
 const worldWidth = mapCols * tileSize;
 const worldHeight = mapRows * tileSize;
 
-function createCollisionMap(cols, rows) {
-  return Array.from({ length: rows }, () => Array(cols).fill(0));
-}
-
-const collisionMap = createCollisionMap(mapCols, mapRows);
-
-for (let row = 0; row < mapRows; row += 1) {
-  for (let col = 0; col < mapCols; col += 1) {
-    if (map[row][col] === 1) {
-      collisionMap[row][col] = 1;
-    }
-  }
-}
-
-const SPRITE_FRAMES = {
-  0: [
-    { sx: 146, sy: 130, sw: 195, sh: 252 },
-    { sx: 341, sy: 130, sw: 342, sh: 252 },
-    { sx: 683, sy: 130, sw: 314, sh: 252 },
-    { sx: 1071, sy: 130, sw: 226, sh: 252 },
-  ],
-  1: [
-    { sx: 184, sy: 1607, sw: 157, sh: 371 },
-    { sx: 341, sy: 1606, sw: 342, sh: 372 },
-    { sx: 683, sy: 1606, sw: 310, sh: 372 },
-    { sx: 1111, sy: 1606, sw: 178, sh: 372 },
-  ],
-  2: [
-    { sx: 341, sy: 1099, sw: 342, sh: 362 },
-    { sx: 683, sy: 1099, sw: 294, sh: 362 },
-    { sx: 1096, sy: 1099, sw: 185, sh: 362 },
-    { sx: 1392, sy: 1099, sw: 315, sh: 362 },
-  ],
-  3: [
-    { sx: 341, sy: 587, sw: 342, sh: 362 },
-    { sx: 683, sy: 587, sw: 318, sh: 362 },
-    { sx: 1057, sy: 587, sw: 308, sh: 362 },
-    { sx: 1365, sy: 587, sw: 342, sh: 362 },
-  ],
-};
+const collisionTileIds = new Set(level ? level.collisionTileIds : []);
+const damageTileIds = new Set(level ? level.damageTileIds : []);
+const blockedCells = level ? level.blocked : null;
+const overheadCells = level ? level.overhead : null;
+const tilesetColumns = level ? level.tilesetColumns : 1;
+const tilesetFirstGid = level ? level.firstGid : 1;
+const TILESET_PATH = level ? level.tileset : 'assets/map-tileset.png';
+const entityFootprintWidth = level && level.entityWidth ? level.entityWidth : SOURCE_TILE_SIZE;
+const entityFootprintHeight = level && level.entityHeight ? level.entityHeight : SOURCE_TILE_SIZE;
+const entityVisualHeight = level && level.entityVisualHeight ? level.entityVisualHeight : SOURCE_TILE_SIZE * 2;
+const mapOffsetX = level && level.offsetX ? level.offsetX : 0;
+const mapOffsetY = level && level.offsetY ? level.offsetY : 0;
+const CANOPY_SOURCE_ROWS = 10;
 
 let tilesetImage = null;
-let tilesPerRow = 0;
-let characterSheet = null;
+let tilesetLoadError = null;
 
 const camera = {
   x: 0,
@@ -82,30 +41,85 @@ const camera = {
   height: canvas ? canvas.height : 800,
 };
 
+function getInitialPlayerPosition() {
+  const spawns = level && level.spawns
+    ? level.spawns.filter((entry) => entry.name === 'PlayerSpawn')
+    : [];
+
+  if (spawns.length === 0) {
+    return { x: 1, y: 1 };
+  }
+
+  if (mapCols === 0 || mapRows === 0) {
+    return { x: 1, y: 1 };
+  }
+
+  const candidates = spawns.map((spawn) => ({
+    x: Math.floor((spawn.x - mapOffsetX) / SOURCE_TILE_SIZE),
+    y: Math.floor((spawn.y - mapOffsetY) / SOURCE_TILE_SIZE),
+  }));
+
+  const walkableCandidates = candidates.filter((candidate) => {
+    if (candidate.x < 0 || candidate.y < 0 || candidate.x >= mapCols || candidate.y >= mapRows) {
+      return false;
+    }
+
+    if (blockedCells && blockedCells[candidate.y] && blockedCells[candidate.y][candidate.x]) {
+      return false;
+    }
+
+    return true;
+  });
+
+  const preferred = walkableCandidates.find((candidate) => (
+    !overheadCells
+    || !overheadCells[candidate.y]
+    || !overheadCells[candidate.y][candidate.x]
+  ));
+
+  if (preferred) {
+    return preferred;
+  }
+
+  if (walkableCandidates.length > 0) {
+    return walkableCandidates[walkableCandidates.length - 1];
+  }
+
+  return candidates[0];
+}
+
+const initialPlayerPosition = getInitialPlayerPosition();
+
 const player = {
-  x: 1,
-  y: 1,
-  direction: 0,
-  currentFrame: 0,
+  x: initialPlayerPosition.x,
+  y: initialPlayerPosition.y,
+  direction: DIRECTION.DOWN,
   isMoving: false,
+  walkStartedAt: 0,
 };
 
-const CHARACTER_ID = 'char_001';
+window.player = player;
 
-const pauseMenu = document.getElementById('pause-menu');
-const pauseNameEl = document.getElementById('pause-name');
-const pauseJobEl = document.getElementById('pause-job');
-const pauseHpEl = document.getElementById('pause-hp');
-const pauseSpeedEl = document.getElementById('pause-speed');
-const switchKnightBtn = document.getElementById('switch-knight-btn');
-const switchBlackMageBtn = document.getElementById('switch-black-mage-btn');
-const closeMenuBtn = document.getElementById('close-menu-btn');
+const CHARACTER_ID = 'char_001';
 
 const keysHeld = new Set();
 
 let movementEnabled = true;
 let assetsReady = false;
 let isPaused = false;
+let animationFrameId = null;
+
+window.canOpenPauseMenu = function canOpenPauseMenu() {
+  return isOnMapScreen() && movementEnabled;
+};
+
+window.setGamePaused = function setGamePaused(value) {
+  isPaused = Boolean(value);
+};
+
+window.redrawGame = function redrawGame() {
+  draw();
+};
 
 function loadImage(src) {
   return new Promise((resolve, reject) => {
@@ -116,44 +130,40 @@ function loadImage(src) {
   });
 }
 
+function gidToLocalTileId(gid) {
+  if (!gid) {
+    return -1;
+  }
+
+  return gid - tilesetFirstGid;
+}
+
 function preloadAssets(onComplete) {
-  let loadedCount = 0;
-  const totalAssets = 2;
-
-  function checkComplete() {
-    loadedCount += 1;
-
-    if (loadedCount === totalAssets) {
-      assetsReady = true;
-      onComplete();
-    }
+  if (!level) {
+    console.error('Missing window.TILED_LEVEL. Run: npm run build:map');
+    assetsReady = true;
+    onComplete();
+    return;
   }
 
   loadImage(TILESET_PATH)
     .then((image) => {
       tilesetImage = image;
-      tilesPerRow = Math.floor(image.width / tileSize);
     })
-    .catch(() => {
-      console.error(`Failed to load asset: ${TILESET_PATH}`);
+    .catch((error) => {
+      tilesetLoadError = error.message;
+      console.error(error.message);
     })
-    .finally(checkComplete);
-
-  loadImage(CHARACTER_SHEET_PATH)
-    .then((sheet) => {
-      characterSheet = sheet;
-    })
-    .catch(() => {
-      console.error(`Failed to load asset: ${CHARACTER_SHEET_PATH}`);
-      return loadImage(CHARACTER_FALLBACK_PATH)
-        .then((image) => {
-          characterSheet = image;
+    .finally(() => {
+      preloadCharacterAssets(level)
+        .catch((error) => {
+          console.warn('Character assets failed to load:', error.message);
         })
-        .catch(() => {
-          console.error(`Failed to load asset: ${CHARACTER_FALLBACK_PATH}`);
+        .finally(() => {
+          assetsReady = true;
+          onComplete();
         });
-    })
-    .finally(checkComplete);
+    });
 }
 
 function updateCamera() {
@@ -173,81 +183,121 @@ function updateCamera() {
 }
 
 function drawPlayer() {
-  const drawX = player.x * tileSize;
-  const drawY = player.y * tileSize;
-
-  if (!characterSheet) {
-    ctx.fillStyle = '#1565c0';
-    ctx.fillRect(drawX, drawY, tileSize, tileSize);
-    return;
-  }
-
-  const frames = SPRITE_FRAMES[player.direction];
-  const rect = frames && frames[player.currentFrame];
-
-  if (!rect) {
-    ctx.fillStyle = '#1565c0';
-    ctx.fillRect(drawX, drawY, tileSize, tileSize);
-    return;
-  }
-
-  ctx.drawImage(
-    characterSheet,
-    rect.sx,
-    rect.sy,
-    rect.sw,
-    rect.sh,
-    drawX,
-    drawY,
-    tileSize,
-    tileSize
-  );
+  drawPlayerCharacter(ctx, player, tileSize, SOURCE_TILE_SIZE);
 }
 
-function drawMapFallback() {
+function startAnimationLoop() {
+  if (animationFrameId) {
+    return;
+  }
+
+  function tick() {
+    if (assetsReady && isOnMapScreen() && movementEnabled && !isPaused && player.isMoving) {
+      draw();
+    }
+    animationFrameId = requestAnimationFrame(tick);
+  }
+
+  animationFrameId = requestAnimationFrame(tick);
+}
+
+function drawMapFallback(message, detail) {
   if (!ctx) {
     return;
   }
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  updateCamera();
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#ffd54f';
+  ctx.font = '18px Segoe UI, sans-serif';
+  ctx.fillText(message || 'Loading map...', 24, 40);
 
-  ctx.save();
-  ctx.translate(-camera.x, -camera.y);
-  const fallbackWidth = worldWidth || canvas.width;
-  const fallbackHeight = worldHeight || canvas.height;
-  ctx.fillStyle = '#4a6741';
-  ctx.fillRect(0, 0, fallbackWidth, fallbackHeight);
-  drawPlayer();
-  ctx.restore();
+  if (detail) {
+    ctx.fillStyle = '#ccc';
+    ctx.font = '14px Segoe UI, sans-serif';
+    ctx.fillText(detail, 24, 68);
+  }
+}
+
+function drawTileSlice(col, row, sourceY, sourceHeight) {
+  const gid = map[row][col];
+  const localTileId = gidToLocalTileId(gid);
+
+  if (localTileId < 0) {
+    return;
+  }
+
+  const sx = (localTileId % tilesetColumns) * SOURCE_TILE_SIZE;
+  const sy = Math.floor(localTileId / tilesetColumns) * SOURCE_TILE_SIZE + sourceY;
+  const destX = col * tileSize;
+  const destY = row * tileSize + Math.round((sourceY / SOURCE_TILE_SIZE) * tileSize);
+  const destHeight = Math.round((sourceHeight / SOURCE_TILE_SIZE) * tileSize);
+
+  ctx.drawImage(
+    tilesetImage,
+    sx,
+    sy,
+    SOURCE_TILE_SIZE,
+    sourceHeight,
+    destX,
+    destY,
+    tileSize,
+    destHeight
+  );
 }
 
 function drawTileMap() {
-  if (!tilesetImage || tilesPerRow === 0) {
-    ctx.fillStyle = '#4a6741';
-    ctx.fillRect(0, 0, worldWidth, worldHeight);
+  if (!tilesetImage) {
     return;
   }
 
   for (let row = 0; row < mapRows; row += 1) {
     for (let col = 0; col < mapCols; col += 1) {
-      const tileNumber = map[row][col];
-      const sx = (tileNumber % tilesPerRow) * tileSize;
-      const sy = Math.floor(tileNumber / tilesPerRow) * tileSize;
-      const destX = col * tileSize;
-      const destY = row * tileSize;
+      const isSplitCanopy = shouldSplitCanopyTile(col, row);
 
-      ctx.drawImage(
-        tilesetImage,
-        sx,
-        sy,
-        tileSize,
-        tileSize,
-        destX,
-        destY,
-        tileSize,
-        tileSize
-      );
+      if (isSplitCanopy) {
+        drawTileSlice(col, row, CANOPY_SOURCE_ROWS, SOURCE_TILE_SIZE - CANOPY_SOURCE_ROWS);
+        continue;
+      }
+
+      drawTileSlice(col, row, 0, SOURCE_TILE_SIZE);
+    }
+  }
+}
+
+function shouldDrawCanopyOverPlayer(col, row) {
+  if (!overheadCells || !overheadCells[row] || !overheadCells[row][col]) {
+    return false;
+  }
+
+  const rowDistance = player.y - row;
+  const colDistance = Math.abs(player.x - col);
+
+  // Only draw canopy from tiles north of the player so it does not cover their sprite.
+  return colDistance <= 1 && rowDistance >= 1 && rowDistance <= 3;
+}
+
+function shouldSplitCanopyTile(col, row) {
+  if (!overheadCells || !overheadCells[row] || !overheadCells[row][col]) {
+    return false;
+  }
+
+  return shouldDrawCanopyOverPlayer(col, row);
+}
+
+function drawOverheadCanopies() {
+  if (!tilesetImage || !overheadCells) {
+    return;
+  }
+
+  for (let row = 0; row < mapRows; row += 1) {
+    for (let col = 0; col < mapCols; col += 1) {
+      if (!shouldDrawCanopyOverPlayer(col, row)) {
+        continue;
+      }
+
+      drawTileSlice(col, row, 0, CANOPY_SOURCE_ROWS);
     }
   }
 }
@@ -257,8 +307,24 @@ function draw() {
     return;
   }
 
+  if (!level) {
+    drawMapFallback(
+      'Map data missing.',
+      'Run npm run build:map and open index.html from the project root.'
+    );
+    return;
+  }
+
   if (!assetsReady) {
-    drawMapFallback();
+    drawMapFallback('Loading map assets...');
+    return;
+  }
+
+  if (!tilesetImage) {
+    drawMapFallback(
+      'Map tileset failed to load.',
+      `${TILESET_PATH} — run: npm install && npm run build:map`
+    );
     return;
   }
 
@@ -270,6 +336,7 @@ function draw() {
   ctx.imageSmoothingEnabled = false;
   drawTileMap();
   drawPlayer();
+  drawOverheadCanopies();
   ctx.restore();
 }
 
@@ -278,78 +345,42 @@ function isOnMapScreen() {
     && document.getElementById('battle-screen').style.display === 'none';
 }
 
-function updatePauseMenuStats() {
-  if (!pauseNameEl || !pauseJobEl || !pauseHpEl || !pauseSpeedEl) {
-    return;
-  }
-
-  const character = characters[CHARACTER_ID];
-  const stats = calculateStats(CHARACTER_ID);
-  const job = jobs[character.current_job];
-
-  if (!stats || !job) {
-    return;
-  }
-
-  pauseNameEl.textContent = character.name;
-  pauseJobEl.textContent = job.name;
-  pauseHpEl.textContent = stats.hp;
-  pauseSpeedEl.textContent = stats.speed;
-}
-
-function openPauseMenu() {
-  isPaused = true;
-  updatePauseMenuStats();
-  if (pauseMenu) {
-    pauseMenu.style.display = 'block';
-  }
-}
-
-function closePauseMenu() {
-  isPaused = false;
-  if (pauseMenu) {
-    pauseMenu.style.display = 'none';
-  }
-}
-
-function switchJob(jobId) {
-  characters[CHARACTER_ID].current_job = jobId;
-  updatePauseMenuStats();
-}
-
-function togglePauseMenu() {
-  if (!isOnMapScreen() || !movementEnabled) {
-    return;
-  }
-
-  if (isPaused) {
-    closePauseMenu();
-  } else {
-    openPauseMenu();
-  }
-}
-
 function isWalkable(x, y) {
   if (x < 0 || y < 0 || x >= mapCols || y >= mapRows) {
     return false;
   }
 
-  return collisionMap[y][x] === 0;
+  if (blockedCells && blockedCells[y] && blockedCells[y][x]) {
+    return false;
+  }
+
+  const gid = map[y][x];
+  const localTileId = gidToLocalTileId(gid);
+
+  if (localTileId < 0) {
+    return false;
+  }
+
+  if (!blockedCells && collisionTileIds.has(localTileId)) {
+    return false;
+  }
+
+  return true;
 }
 
 function setPlayerDirection(key) {
   switch (key) {
     case 'ArrowDown':
-      player.direction = 0;
+      player.direction = DIRECTION.DOWN;
       break;
     case 'ArrowLeft':
-      player.direction = 1;
+      player.direction = DIRECTION.LEFT;
       break;
     case 'ArrowRight':
-      player.direction = 2;
+      player.direction = DIRECTION.RIGHT;
       break;
     case 'ArrowUp':
-      player.direction = 3;
+      player.direction = DIRECTION.UP;
       break;
     default:
       break;
@@ -365,7 +396,9 @@ function isArrowKey(key) {
 
 function triggerEncounter() {
   movementEnabled = false;
-  closePauseMenu();
+  if (typeof closePauseMenu === 'function') {
+    closePauseMenu();
+  }
   document.getElementById('map-screen').style.display = 'none';
   document.getElementById('battle-screen').style.display = 'block';
   startBattle();
@@ -373,6 +406,18 @@ function triggerEncounter() {
 
 function tryRandomEncounter() {
   if (isPaused) {
+    return;
+  }
+
+  if (!GameState.canTriggerEncounters()) {
+    return;
+  }
+
+  const gid = map[player.y][player.x];
+  const localTileId = gidToLocalTileId(gid);
+
+  if (damageTileIds.has(localTileId)) {
+    triggerEncounter();
     return;
   }
 
@@ -388,7 +433,6 @@ function movePlayer(dx, dy) {
   if (isWalkable(newX, newY)) {
     player.x = newX;
     player.y = newY;
-    player.currentFrame = (player.currentFrame + 1) % WALK_FRAMES;
     tryRandomEncounter();
     return true;
   }
@@ -398,39 +442,19 @@ function movePlayer(dx, dy) {
 
 window.onBattleVictory = function () {
   movementEnabled = true;
-  closePauseMenu();
+  if (typeof closePauseMenu === 'function') {
+    closePauseMenu();
+  }
   draw();
 };
 
-function initPauseMenu() {
-  if (switchKnightBtn) {
-    switchKnightBtn.addEventListener('click', () => {
-      switchJob('job_knight');
-    });
-  }
-
-  if (switchBlackMageBtn) {
-    switchBlackMageBtn.addEventListener('click', () => {
-      switchJob('job_black_mage');
-    });
-  }
-
-  if (closeMenuBtn) {
-    closeMenuBtn.addEventListener('click', () => {
-      closePauseMenu();
-    });
-  }
-}
-
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Enter' && isOnMapScreen() && movementEnabled) {
-    togglePauseMenu();
-    event.preventDefault();
-    return;
-  }
-
   if (!movementEnabled || isPaused || !isArrowKey(event.key) || keysHeld.has(event.key)) {
     return;
+  }
+
+  if (keysHeld.size === 0) {
+    player.walkStartedAt = performance.now();
   }
 
   keysHeld.add(event.key);
@@ -467,7 +491,7 @@ document.addEventListener('keyup', (event) => {
 
   if (keysHeld.size === 0) {
     player.isMoving = false;
-    player.currentFrame = 0;
+    player.walkStartedAt = 0;
     if (!isPaused) {
       draw();
     }
@@ -480,9 +504,11 @@ function initGame() {
     return;
   }
 
-  initPauseMenu();
-  drawMapFallback();
-  preloadAssets(draw);
+  drawMapFallback('Loading map assets...');
+  preloadAssets(() => {
+    draw();
+    startAnimationLoop();
+  });
 }
 
-initGame();
+window.initGame = initGame;

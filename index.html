@@ -4,361 +4,121 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>JRPG Game</title>
-  <style>
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      margin: 0;
-      min-height: 100vh;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      background-color: #1a1a2e;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      color: #f0f0f0;
-    }
-
-    #game-container {
-      background-color: rgba(0, 0, 0, 0.7);
-      padding: 20px;
-      border-radius: 10px;
-    }
-
-    #map-screen {
-      display: block;
-      position: relative;
-    }
-
-    #map-screen canvas {
-      display: block;
-      width: min(80vmin, 800px);
-      height: min(80vmin, 800px);
-      background: #2e7d32;
-      border: 2px solid #fff;
-      image-rendering: pixelated;
-    }
-
-    #battle-screen .battle-panel {
-      width: 640px;
-      border: 4px solid #4a4a6a;
-      border-radius: 8px;
-      overflow: hidden;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-    }
-
-    .arena {
-      height: 320px;
-      background: linear-gradient(180deg, #2a3a5c 0%, #1a2540 60%, #3d5a3d 100%);
-      padding: 24px 32px;
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-    }
-
-    .combatant {
-      background: rgba(0, 0, 0, 0.45);
-      border: 2px solid #6a7a9a;
-      border-radius: 8px;
-      padding: 16px 24px;
-      min-width: 180px;
-    }
-
-    .combatant.enemy {
-      border-color: #9a4a4a;
-    }
-
-    .combatant.player {
-      border-color: #4a7a9a;
-      align-self: flex-end;
-    }
-
-    .combatant-name {
-      font-size: 1.25rem;
-      font-weight: bold;
-      margin-bottom: 8px;
-      letter-spacing: 0.05em;
-    }
-
-    .combatant.enemy .combatant-name {
-      color: #ff8888;
-    }
-
-    .combatant.player .combatant-name {
-      color: #88ccff;
-    }
-
-    .combatant-hp {
-      font-size: 1rem;
-      color: #ccc;
-    }
-
-    .combatant-hp span {
-      color: #fff;
-      font-weight: bold;
-    }
-
-    .ui-menu {
-      background: #1a1a2e;
-      border-top: 4px solid #4a4a6a;
-      padding: 20px 32px 28px;
-    }
-
-    .menu-title {
-      font-size: 0.85rem;
-      text-transform: uppercase;
-      letter-spacing: 0.15em;
-      color: #888;
-      margin-bottom: 16px;
-    }
-
-    .command-row {
-      display: flex;
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-
-    #attackBtn,
-    #magicBtn {
-      padding: 12px 32px;
-      font-size: 1rem;
-      font-weight: bold;
-      background: #3a5a8a;
-      color: #fff;
-      border: 2px solid #5a8aba;
-      border-radius: 6px;
-      cursor: pointer;
-      letter-spacing: 0.05em;
-    }
-
-    #attackBtn:disabled,
-    #magicBtn:disabled {
-      background: #2a2a3a;
-      color: #666;
-      border-color: #444;
-      cursor: not-allowed;
-    }
-
-    #attackBtn:not(:disabled):hover,
-    #magicBtn:not(:disabled):hover {
-      background: #4a7aba;
-    }
-
-    .party-status {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      margin-bottom: 24px;
-    }
-
-    .party-member {
-      background: rgba(0, 0, 0, 0.35);
-      border: 2px solid #4a7a9a;
-      border-radius: 8px;
-      padding: 12px 16px;
-    }
-
-    .party-member.active {
-      border-color: #ffd54f;
-      box-shadow: 0 0 12px rgba(255, 213, 79, 0.45);
-      background: rgba(74, 122, 154, 0.35);
-    }
-
-    .party-member.dead {
-      opacity: 0.45;
-    }
-
-    .party-member-name {
-      font-weight: bold;
-      color: #88ccff;
-      margin-bottom: 6px;
-    }
-
-    .party-member-stats {
-      font-size: 0.95rem;
-      color: #ccc;
-      margin-bottom: 8px;
-    }
-
-    .party-member-stats span {
-      color: #fff;
-      font-weight: bold;
-    }
-
-    #battleMessage {
-      min-height: 1.25rem;
-      color: #ffd54f;
-      font-size: 0.95rem;
-      margin-bottom: 12px;
-    }
-
-    .atb-section {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .atb-row {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .atb-label {
-      width: 70px;
-      font-size: 0.9rem;
-      color: #aaa;
-    }
-
-    progress {
-      flex: 1;
-      height: 20px;
-      border: none;
-      border-radius: 4px;
-      overflow: hidden;
-    }
-
-    progress::-webkit-progress-bar {
-      background: #2a2a3a;
-      border-radius: 4px;
-    }
-
-    #bartzAtb::-webkit-progress-value,
-    #lennaAtb::-webkit-progress-value {
-      background: linear-gradient(90deg, #2a6aaa, #4a9aff);
-      border-radius: 4px;
-    }
-
-    #enemyAtb::-webkit-progress-value {
-      background: linear-gradient(90deg, #aa2a2a, #ff4a4a);
-      border-radius: 4px;
-    }
-
-    progress::-moz-progress-bar {
-      border-radius: 4px;
-    }
-
-    #bartzAtb::-moz-progress-bar,
-    #lennaAtb::-moz-progress-bar {
-      background: linear-gradient(90deg, #2a6aaa, #4a9aff);
-    }
-
-    #enemyAtb::-moz-progress-bar {
-      background: linear-gradient(90deg, #aa2a2a, #ff4a4a);
-    }
-
-    #pause-menu button {
-      display: block;
-      width: 100%;
-      margin-top: 10px;
-      padding: 10px 16px;
-      font-size: 1rem;
-      cursor: pointer;
-      background: #3a5a8a;
-      color: #fff;
-      border: 2px solid #5a8aba;
-      border-radius: 6px;
-    }
-
-    #pause-menu button:hover {
-      background: #4a7aba;
-    }
-
-    #pause-menu h2 {
-      margin-top: 0;
-    }
-
-    #pause-menu p {
-      margin: 8px 0;
-    }
-
-    #pause-menu {
-      bottom: 0;
-      top: auto;
-      max-height: 100%;
-      overflow-y: auto;
-    }
-  </style>
+  <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <div id="game-container">
-  <div id="map-screen">
-    <canvas id="gameCanvas" width="800" height="800"></canvas>
+    <div id="map-screen">
+      <canvas id="gameCanvas" width="800" height="800"></canvas>
+      <button id="pause-btn" type="button" aria-label="Open pause menu">Pause</button>
 
-    <div id="pause-menu" style="display: none; position: absolute; z-index: 10; background: black; color: white; padding: 20px; bottom: 0; left: 0; width: 100%; box-sizing: border-box;">
-      <h2>Pause Menu</h2>
-      <p>Name: <span id="pause-name">Bartz</span></p>
-      <p>Current Job: <span id="pause-job">Knight</span></p>
-      <p>HP: <span id="pause-hp">120</span></p>
-      <p>Speed: <span id="pause-speed">10</span></p>
-      <button id="switch-knight-btn" type="button">Switch to Knight</button>
-      <button id="switch-black-mage-btn" type="button">Switch to Black Mage</button>
-      <button id="close-menu-btn" type="button">Close Menu</button>
-    </div>
-  </div>
+      <div id="pause-menu" aria-hidden="true">
+        <div class="pause-panel">
+          <div class="pause-header">
+            <h2>Pause Menu</h2>
+          </div>
+          <p class="pause-subtitle">Pick your hero, check your stats, then jump back into the adventure!</p>
 
-  <div id="battle-screen" style="display: none;">
-    <div class="battle-panel">
-      <div class="arena">
-        <div class="combatant enemy">
-          <div class="combatant-name" id="enemyName">Goblin</div>
-          <div class="combatant-hp">HP: <span id="enemyHp">50</span></div>
-        </div>
-      </div>
-
-      <div class="ui-menu">
-        <div class="menu-title">Party Status</div>
-        <div class="party-status">
-          <div class="party-member" id="party-bartz">
-            <div class="party-member-name" id="bartzName">Bartz</div>
-            <div class="party-member-stats">
-              HP: <span id="bartzHp">120/120</span>
-              &nbsp;|&nbsp;
-              MP: <span id="bartzMp">5/5</span>
+          <div class="pause-stats">
+            <div class="stat-card">
+              <span class="stat-label">Name</span>
+              <span class="stat-value" id="pause-name">Bartz</span>
             </div>
-            <div class="atb-row">
-              <span class="atb-label">ATB</span>
-              <progress id="bartzAtb" max="100" value="0"></progress>
+            <div class="stat-card">
+              <span class="stat-label">Current Job</span>
+              <span class="stat-value" id="pause-job">Knight</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">HP</span>
+              <span class="stat-value" id="pause-hp">120</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Speed</span>
+              <span class="stat-value" id="pause-speed">10</span>
             </div>
           </div>
 
-          <div class="party-member" id="party-lenna">
-            <div class="party-member-name" id="lennaName">Lenna</div>
-            <div class="party-member-stats">
-              HP: <span id="lennaHp">90/90</span>
-              &nbsp;|&nbsp;
-              MP: <span id="lennaMp">35/35</span>
-            </div>
-            <div class="atb-row">
-              <span class="atb-label">ATB</span>
-              <progress id="lennaAtb" max="100" value="0"></progress>
-            </div>
-          </div>
-        </div>
+          <h3 class="character-selector-title">Choose Your Character</h3>
+          <p id="character-select-status">Tap a hero to swap on the map instantly.</p>
+          <div id="character-selector" aria-label="Character selector"></div>
 
-        <div class="menu-title">Commands</div>
-        <div id="battleMessage"></div>
-        <div class="command-row">
-          <button id="attackBtn" disabled>Attack</button>
-          <button id="magicBtn" disabled>Magic</button>
-        </div>
-
-        <div class="atb-section">
-          <div class="atb-row">
-            <span class="atb-label">Enemy</span>
-            <progress id="enemyAtb" max="100" value="0"></progress>
+          <div class="pause-actions">
+            <button id="switch-knight-btn" type="button">Switch to Knight</button>
+            <button id="switch-black-mage-btn" type="button">Switch to Black Mage</button>
+            <button id="close-menu-btn" type="button">Resume Game</button>
           </div>
         </div>
       </div>
     </div>
-  </div>
+
+    <div id="battle-screen" style="display: none;">
+      <div class="battle-panel">
+        <div class="arena">
+          <div class="combatant enemy">
+            <div class="combatant-name" id="enemyName">Goblin</div>
+            <div class="combatant-hp">HP: <span id="enemyHp">50</span></div>
+          </div>
+        </div>
+
+        <div class="ui-menu">
+          <div class="menu-title">Party Status</div>
+          <div class="party-status">
+            <div class="party-member" id="party-bartz">
+              <div class="party-member-name" id="bartzName">Bartz</div>
+              <div class="party-member-stats">
+                HP: <span id="bartzHp">120/120</span>
+                &nbsp;|&nbsp;
+                MP: <span id="bartzMp">5/5</span>
+              </div>
+              <div class="atb-row">
+                <span class="atb-label">ATB</span>
+                <progress id="bartzAtb" max="100" value="0"></progress>
+              </div>
+            </div>
+
+            <div class="party-member" id="party-lenna">
+              <div class="party-member-name" id="lennaName">Lenna</div>
+              <div class="party-member-stats">
+                HP: <span id="lennaHp">90/90</span>
+                &nbsp;|&nbsp;
+                MP: <span id="lennaMp">35/35</span>
+              </div>
+              <div class="atb-row">
+                <span class="atb-label">ATB</span>
+                <progress id="lennaAtb" max="100" value="0"></progress>
+              </div>
+            </div>
+          </div>
+
+          <div class="menu-title">Commands</div>
+          <div id="battleMessage"></div>
+          <div class="command-row">
+            <button id="attackBtn" disabled>Attack</button>
+            <button id="magicBtn" disabled>Magic</button>
+          </div>
+
+          <div class="atb-section">
+            <div class="atb-row">
+              <span class="atb-label">Enemy</span>
+              <progress id="enemyAtb" max="100" value="0"></progress>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
+  <script src="assets/level.js"></script>
+  <script src="assets/overworld.js"></script>
+  <script src="maps.js"></script>
+  <script src="characterRoster.js"></script>
+  <script src="gameState.js"></script>
+  <script src="characterAssets.js"></script>
   <script src="characters.js"></script>
   <script src="jobs.js"></script>
   <script src="statCalculator.js"></script>
   <script src="battle.js"></script>
   <script src="game.js"></script>
+  <script src="js/main.js"></script>
 </body>
 </html>
