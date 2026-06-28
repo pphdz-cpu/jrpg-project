@@ -11,6 +11,32 @@ const GameState = {
   zoneType: ZONE_TYPES.TOWN,
   isSafeZone: true,
   isStarterTown: true,
+  currentPlayerImage: DEFAULT_PLAYER_CHARACTER_ID,
+
+  loadPlayerImagePreference() {
+    try {
+      const saved = sessionStorage.getItem('currentPlayerImage');
+      if (saved) {
+        this.currentPlayerImage = saved;
+      }
+    } catch (error) {
+      // Ignore storage errors in restricted environments.
+    }
+  },
+
+  setCurrentPlayerImage(characterId) {
+    if (!characterId) {
+      return;
+    }
+
+    this.currentPlayerImage = characterId;
+
+    try {
+      sessionStorage.setItem('currentPlayerImage', characterId);
+    } catch (error) {
+      // Ignore storage errors in restricted environments.
+    }
+  },
 
   applyMap(levelData) {
     if (!levelData) {
@@ -56,6 +82,8 @@ const GameState = {
 if (window.TILED_LEVEL) {
   GameState.applyMap(window.TILED_LEVEL);
 }
+
+GameState.loadPlayerImagePreference();
 
 window.ZONE_TYPES = ZONE_TYPES;
 window.GameState = GameState;

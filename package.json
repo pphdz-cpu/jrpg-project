@@ -8,6 +8,7 @@
     "build:map": "node build-map-assets.js",
     "build:character": "node process-character-sheet.js",
     "build:player": "node build-lpc-player.js",
+    "build:characters": "node build-all-characters.js",
     "validate": "node scripts/validate.js"
   },
   "dependencies": {

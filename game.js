@@ -100,21 +100,24 @@ const player = {
 
 const CHARACTER_ID = 'char_001';
 
-const pauseMenu = document.getElementById('pause-menu');
-const pauseNameEl = document.getElementById('pause-name');
-const pauseJobEl = document.getElementById('pause-job');
-const pauseHpEl = document.getElementById('pause-hp');
-const pauseSpeedEl = document.getElementById('pause-speed');
-const switchKnightBtn = document.getElementById('switch-knight-btn');
-const switchBlackMageBtn = document.getElementById('switch-black-mage-btn');
-const closeMenuBtn = document.getElementById('close-menu-btn');
-
 const keysHeld = new Set();
 
 let movementEnabled = true;
 let assetsReady = false;
 let isPaused = false;
 let animationFrameId = null;
+
+window.canOpenPauseMenu = function canOpenPauseMenu() {
+  return isOnMapScreen() && movementEnabled;
+};
+
+window.setGamePaused = function setGamePaused(value) {
+  isPaused = Boolean(value);
+};
+
+window.redrawGame = function redrawGame() {
+  draw();
+};
 
 function loadImage(src) {
   return new Promise((resolve, reject) => {
@@ -340,57 +343,6 @@ function isOnMapScreen() {
     && document.getElementById('battle-screen').style.display === 'none';
 }
 
-function updatePauseMenuStats() {
-  if (!pauseNameEl || !pauseJobEl || !pauseHpEl || !pauseSpeedEl) {
-    return;
-  }
-
-  const character = characters[CHARACTER_ID];
-  const stats = calculateStats(CHARACTER_ID);
-  const job = jobs[character.current_job];
-
-  if (!stats || !job) {
-    return;
-  }
-
-  pauseNameEl.textContent = character.name;
-  pauseJobEl.textContent = job.name;
-  pauseHpEl.textContent = stats.hp;
-  pauseSpeedEl.textContent = stats.speed;
-}
-
-function openPauseMenu() {
-  isPaused = true;
-  updatePauseMenuStats();
-  if (pauseMenu) {
-    pauseMenu.style.display = 'block';
-  }
-}
-
-function closePauseMenu() {
-  isPaused = false;
-  if (pauseMenu) {
-    pauseMenu.style.display = 'none';
-  }
-}
-
-function switchJob(jobId) {
-  characters[CHARACTER_ID].current_job = jobId;
-  updatePauseMenuStats();
-}
-
-function togglePauseMenu() {
-  if (!isOnMapScreen() || !movementEnabled) {
-    return;
-  }
-
-  if (isPaused) {
-    closePauseMenu();
-  } else {
-    openPauseMenu();
-  }
-}
-
 function isWalkable(x, y) {
   if (x < 0 || y < 0 || x >= mapCols || y >= mapRows) {
     return false;
@@ -442,7 +394,9 @@ function isArrowKey(key) {
 
 function triggerEncounter() {
   movementEnabled = false;
-  closePauseMenu();
+  if (typeof closePauseMenu === 'function') {
+    closePauseMenu();
+  }
   document.getElementById('map-screen').style.display = 'none';
   document.getElementById('battle-screen').style.display = 'block';
   startBattle();
@@ -486,37 +440,13 @@ function movePlayer(dx, dy) {
 
 window.onBattleVictory = function () {
   movementEnabled = true;
-  closePauseMenu();
+  if (typeof closePauseMenu === 'function') {
+    closePauseMenu();
+  }
   draw();
 };
 
-function initPauseMenu() {
-  if (switchKnightBtn) {
-    switchKnightBtn.addEventListener('click', () => {
-      switchJob('job_knight');
-    });
-  }
-
-  if (switchBlackMageBtn) {
-    switchBlackMageBtn.addEventListener('click', () => {
-      switchJob('job_black_mage');
-    });
-  }
-
-  if (closeMenuBtn) {
-    closeMenuBtn.addEventListener('click', () => {
-      closePauseMenu();
-    });
-  }
-}
-
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Enter' && isOnMapScreen() && movementEnabled) {
-    togglePauseMenu();
-    event.preventDefault();
-    return;
-  }
-
   if (!movementEnabled || isPaused || !isArrowKey(event.key) || keysHeld.has(event.key)) {
     return;
   }
@@ -572,7 +502,6 @@ function initGame() {
     return;
   }
 
-  initPauseMenu();
   drawMapFallback('Loading map assets...');
   preloadAssets(() => {
     draw();
@@ -580,4 +509,4 @@ function initGame() {
   });
 }
 
-initGame();
+window.initGame = initGame;

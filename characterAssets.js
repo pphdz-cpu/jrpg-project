@@ -1,4 +1,4 @@
-const CHARACTER_ROOT = 'assets/Characters';
+const CHARACTER_ROOT = 'assets/images/characters';
 
 const DIRECTION = {
   DOWN: 0,
@@ -36,21 +36,32 @@ const DEFAULT_NPC_META = {
 
 const CharacterAssets = {
   playerMeta: { ...DEFAULT_PLAYER_META },
+  currentCharacterId: null,
   images: {
     playerIdle: null,
     playerWalk: null,
     npcs: {},
   },
   ready: false,
-
-  paths: {
-    playerIdle: `${CHARACTER_ROOT}/player_idle.png`,
-    playerWalk: `${CHARACTER_ROOT}/player_walk.png`,
-    playerMeta: `${CHARACTER_ROOT}/player.json`,
-    npc: (id) => `${CHARACTER_ROOT}/npc_${id}.png`,
-    npcWalk: (id) => `${CHARACTER_ROOT}/npc_${id}_walk.png`,
-  },
+  loadingPromise: null,
 };
+
+function getCharacterPaths(characterId) {
+  const entry = CharacterRoster.getById(characterId);
+  if (!entry) {
+    return {
+      playerIdle: `${CHARACTER_ROOT}/${characterId}/player_idle.png`,
+      playerWalk: `${CHARACTER_ROOT}/${characterId}/player_walk.png`,
+      playerMeta: `${CHARACTER_ROOT}/${characterId}/player.json`,
+    };
+  }
+
+  return {
+    playerIdle: entry.idle,
+    playerWalk: entry.walk,
+    playerMeta: entry.meta,
+  };
+}
 
 function loadImage(src) {
   return new Promise((resolve, reject) => {
@@ -61,11 +72,11 @@ function loadImage(src) {
   });
 }
 
-async function loadPlayerMeta() {
+async function loadPlayerMeta(metaPath) {
   try {
-    const response = await fetch(CharacterAssets.paths.playerMeta);
+    const response = await fetch(metaPath);
     if (!response.ok) {
-      throw new Error(`Failed to load ${CharacterAssets.paths.playerMeta}`);
+      throw new Error(`Failed to load ${metaPath}`);
     }
     const meta = await response.json();
     CharacterAssets.playerMeta = { ...DEFAULT_PLAYER_META, ...meta };
@@ -159,30 +170,50 @@ function drawCharacterSprite(ctx, options) {
   );
 }
 
+async function loadPlayerCharacterAssets(characterId) {
+  const paths = getCharacterPaths(characterId);
+
+  await loadPlayerMeta(paths.playerMeta);
+
+  const [playerIdle, playerWalk] = await Promise.all([
+    loadImage(paths.playerIdle).catch(() => null),
+    loadImage(paths.playerWalk).catch(() => null),
+  ]);
+
+  CharacterAssets.images.playerIdle = playerIdle;
+  CharacterAssets.images.playerWalk = playerWalk;
+  CharacterAssets.currentCharacterId = characterId;
+  CharacterAssets.ready = Boolean(playerIdle || playerWalk);
+
+  return CharacterAssets.ready;
+}
+
+async function setPlayerCharacter(characterId) {
+  if (!characterId) {
+    return false;
+  }
+
+  if (CharacterAssets.loadingPromise) {
+    await CharacterAssets.loadingPromise;
+  }
+
+  CharacterAssets.loadingPromise = loadPlayerCharacterAssets(characterId);
+  const loaded = await CharacterAssets.loadingPromise;
+  CharacterAssets.loadingPromise = null;
+  return loaded;
+}
+
 async function preloadCharacterAssets(levelData) {
-  await loadPlayerMeta();
+  await loadCharacterRoster();
 
-  const loads = [
-    loadImage(CharacterAssets.paths.playerIdle)
-      .then((image) => {
-        CharacterAssets.images.playerIdle = image;
-      })
-      .catch(() => {
-        CharacterAssets.images.playerIdle = null;
-      }),
-    loadImage(CharacterAssets.paths.playerWalk)
-      .then((image) => {
-        CharacterAssets.images.playerWalk = image;
-      })
-      .catch(() => {
-        CharacterAssets.images.playerWalk = null;
-      }),
-  ];
+  const characterId = GameState.currentPlayerImage || CharacterRoster.getDefaultId();
+  await setPlayerCharacter(characterId);
 
+  const loads = [];
   const npcs = (levelData && levelData.npcs) || [];
   npcs.forEach((npc) => {
     loads.push(
-      loadImage(CharacterAssets.paths.npc(npc.id))
+      loadImage(`assets/Characters/npc_${npc.id}.png`)
         .then((image) => {
           CharacterAssets.images.npcs[npc.id] = {
             idle: image,
@@ -200,7 +231,7 @@ async function preloadCharacterAssets(levelData) {
     );
 
     loads.push(
-      loadImage(CharacterAssets.paths.npcWalk(npc.id))
+      loadImage(`assets/Characters/npc_${npc.id}_walk.png`)
         .then((image) => {
           if (!CharacterAssets.images.npcs[npc.id]) {
             CharacterAssets.images.npcs[npc.id] = {
@@ -217,7 +248,6 @@ async function preloadCharacterAssets(levelData) {
   });
 
   await Promise.all(loads);
-  CharacterAssets.ready = true;
 }
 
 function drawPlayerCharacter(ctx, player, tileSize, sourceTileSize) {
@@ -264,5 +294,6 @@ function drawNpcs(ctx, npcs, tileSize, sourceTileSize) {
 window.DIRECTION = DIRECTION;
 window.CharacterAssets = CharacterAssets;
 window.preloadCharacterAssets = preloadCharacterAssets;
+window.setPlayerCharacter = setPlayerCharacter;
 window.drawPlayerCharacter = drawPlayerCharacter;
 window.drawNpcs = drawNpcs;

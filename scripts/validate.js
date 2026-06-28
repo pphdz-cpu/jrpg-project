@@ -72,11 +72,13 @@ function validateLevel(level) {
 
 function validateCharacterAssets() {
   const required = [
-    'assets/Characters/player_walk.png',
-    'assets/Characters/player_idle.png',
-    'assets/Characters/player.json',
-    'assets/Characters/chain_armor.gif',
     'assets/map-tileset.png',
+    'assets/images/characters/roster.json',
+    'assets/images/characters/chain_armor/player_idle.png',
+    'assets/images/characters/chain_armor/player_walk.png',
+    'assets/images/characters/chain_armor/player.json',
+    'assets/images/characters/chain_armor/preview.png',
+    'assets/Characters/chain_armor.gif',
   ];
 
   required.forEach((relativePath) => {
@@ -85,7 +87,32 @@ function validateCharacterAssets() {
     }
   });
 
-  const metaPath = path.join(ROOT, 'assets/Characters/player.json');
+  const rosterPath = path.join(ROOT, 'assets/images/characters/roster.json');
+  if (!fs.existsSync(rosterPath)) {
+    return null;
+  }
+
+  const roster = JSON.parse(fs.readFileSync(rosterPath, 'utf8'));
+  if (!Array.isArray(roster) || roster.length === 0) {
+    error('assets/images/characters/roster.json must contain at least one character');
+    return null;
+  }
+
+  roster.forEach((entry) => {
+    ['preview', 'idle', 'walk', 'meta'].forEach((key) => {
+      if (!entry[key]) {
+        error(`Roster entry ${entry.id || '(unknown)'} is missing ${key}`);
+        return;
+      }
+
+      const assetPath = path.join(ROOT, entry[key]);
+      if (!fs.existsSync(assetPath)) {
+        error(`Missing roster asset for ${entry.id}: ${entry[key]}`);
+      }
+    });
+  });
+
+  const metaPath = path.join(ROOT, 'assets/images/characters/chain_armor/player.json');
   if (!fs.existsSync(metaPath)) {
     return null;
   }
@@ -98,7 +125,7 @@ async function validateCharacterSheet(meta) {
     return;
   }
 
-  const walkPath = path.join(ROOT, 'assets/Characters/player_walk.png');
+  const walkPath = path.join(ROOT, 'assets/images/characters/chain_armor/player_walk.png');
   if (!fs.existsSync(walkPath)) {
     return;
   }
