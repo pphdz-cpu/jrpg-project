@@ -6,33 +6,39 @@ if (ctx) {
 }
 
 const ENCOUNTER_CHANCE = 0.15;
+const TRANSITION_FADE_MS = 500;
 
-const level = window.TILED_LEVEL;
-const SOURCE_TILE_SIZE = level ? level.tileWidth : 16;
-const tileSize = level ? level.displayTileSize : 32;
-
-const map = level ? level.layer : [];
-const mapRows = map.length;
-const mapCols = map[0] ? map[0].length : 0;
-const worldWidth = mapCols * tileSize;
-const worldHeight = mapRows * tileSize;
-
-const collisionTileIds = new Set(level ? level.collisionTileIds : []);
-const damageTileIds = new Set(level ? level.damageTileIds : []);
-const blockedCells = level ? level.blocked : null;
-const overheadCells = level ? level.overhead : null;
-const tilesetColumns = level ? level.tilesetColumns : 1;
-const tilesetFirstGid = level ? level.firstGid : 1;
-const TILESET_PATH = level ? level.tileset : 'assets/map-tileset.png';
-const entityFootprintWidth = level && level.entityWidth ? level.entityWidth : SOURCE_TILE_SIZE;
-const entityFootprintHeight = level && level.entityHeight ? level.entityHeight : SOURCE_TILE_SIZE;
-const entityVisualHeight = level && level.entityVisualHeight ? level.entityVisualHeight : SOURCE_TILE_SIZE * 2;
-const mapOffsetX = level && level.offsetX ? level.offsetX : 0;
-const mapOffsetY = level && level.offsetY ? level.offsetY : 0;
+const baseLevel = window.TILED_LEVEL;
+const SOURCE_TILE_SIZE = baseLevel ? baseLevel.tileWidth : 16;
+const tileSize = baseLevel ? baseLevel.displayTileSize : 32;
+const tilesetColumns = baseLevel ? baseLevel.tilesetColumns : 1;
+const tilesetFirstGid = baseLevel ? baseLevel.firstGid : 1;
+const TILESET_PATH = baseLevel ? baseLevel.tileset : 'assets/map-tileset.png';
+const entityFootprintWidth = baseLevel && baseLevel.entityWidth ? baseLevel.entityWidth : SOURCE_TILE_SIZE;
+const entityFootprintHeight = baseLevel && baseLevel.entityHeight ? baseLevel.entityHeight : SOURCE_TILE_SIZE;
+const entityVisualHeight = baseLevel && baseLevel.entityVisualHeight
+  ? baseLevel.entityVisualHeight
+  : SOURCE_TILE_SIZE * 2;
 const CANOPY_SOURCE_ROWS = 10;
+
+let currentMapKey = 'city';
+let level = null;
+let map = [];
+let mapRows = 0;
+let mapCols = 0;
+let worldWidth = 0;
+let worldHeight = 0;
+let blockedCells = null;
+let overheadCells = null;
+let collisionTileIds = new Set();
+let damageTileIds = new Set();
+let mapOffsetX = 0;
+let mapOffsetY = 0;
 
 let tilesetImage = null;
 let tilesetLoadError = null;
+let screenFadeAlpha = 0;
+let isTransitioning = false;
 
 const camera = {
   x: 0,
@@ -40,6 +46,34 @@ const camera = {
   width: canvas ? canvas.width : 800,
   height: canvas ? canvas.height : 800,
 };
+
+function applyWorldMap(mapKey) {
+  const entry = worldMaps[mapKey];
+  if (!entry || !entry.level) {
+    console.error(`Unknown map key "${mapKey}"`);
+    return false;
+  }
+
+  currentMapKey = mapKey;
+  level = entry.level;
+  map = level.layer;
+  mapRows = entry.rows;
+  mapCols = entry.cols;
+  blockedCells = level.blocked || null;
+  overheadCells = level.overhead || null;
+  collisionTileIds = new Set(level.collisionTileIds || []);
+  damageTileIds = new Set(level.damageTileIds || []);
+  mapOffsetX = level.offsetX || 0;
+  mapOffsetY = level.offsetY || 0;
+  worldWidth = mapCols * tileSize;
+  worldHeight = mapRows * tileSize;
+
+  if (window.GameState) {
+    GameState.applyMap(level);
+  }
+
+  return true;
+}
 
 function getInitialPlayerPosition() {
   const spawns = level && level.spawns
@@ -88,6 +122,8 @@ function getInitialPlayerPosition() {
   return candidates[0];
 }
 
+applyWorldMap('city');
+
 const initialPlayerPosition = getInitialPlayerPosition();
 
 const player = {
@@ -99,6 +135,7 @@ const player = {
 };
 
 window.player = player;
+window.currentMapKey = currentMapKey;
 
 const CHARACTER_ID = 'char_001';
 
@@ -110,7 +147,7 @@ let isPaused = false;
 let animationFrameId = null;
 
 window.canOpenPauseMenu = function canOpenPauseMenu() {
-  return isOnMapScreen() && movementEnabled;
+  return isOnMapScreen() && movementEnabled && !isTransitioning;
 };
 
 window.setGamePaused = function setGamePaused(value) {
@@ -140,7 +177,7 @@ function gidToLocalTileId(gid) {
 
 function preloadAssets(onComplete) {
   if (!level) {
-    console.error('Missing window.TILED_LEVEL. Run: npm run build:map');
+    console.error('Missing world map data. Run: npm run build:map');
     assetsReady = true;
     onComplete();
     return;
@@ -192,7 +229,7 @@ function startAnimationLoop() {
   }
 
   function tick() {
-    if (assetsReady && isOnMapScreen() && movementEnabled && !isPaused && player.isMoving) {
+    if (assetsReady && isOnMapScreen() && movementEnabled && !isPaused && !isTransitioning && player.isMoving) {
       draw();
     }
     animationFrameId = requestAnimationFrame(tick);
@@ -274,7 +311,6 @@ function shouldDrawCanopyOverPlayer(col, row) {
   const rowDistance = player.y - row;
   const colDistance = Math.abs(player.x - col);
 
-  // Only draw canopy from tiles north of the player so it does not cover their sprite.
   return colDistance <= 1 && rowDistance >= 1 && rowDistance <= 3;
 }
 
@@ -300,6 +336,33 @@ function drawOverheadCanopies() {
       drawTileSlice(col, row, 0, CANOPY_SOURCE_ROWS);
     }
   }
+}
+
+function drawMapLabel() {
+  if (!ctx || !level || isTransitioning) {
+    return;
+  }
+
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = 'rgba(45, 42, 68, 0.72)';
+  ctx.fillRect(12, 12, 220, 34);
+  ctx.fillStyle = '#fff9c4';
+  ctx.font = '600 16px Fredoka, Segoe UI, sans-serif';
+  ctx.fillText(level.mapName || currentMapKey, 22, 34);
+  ctx.restore();
+}
+
+function drawScreenFade() {
+  if (!ctx || screenFadeAlpha <= 0) {
+    return;
+  }
+
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = `rgba(0, 0, 0, ${screenFadeAlpha})`;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.restore();
 }
 
 function draw() {
@@ -338,6 +401,9 @@ function draw() {
   drawPlayer();
   drawOverheadCanopies();
   ctx.restore();
+
+  drawMapLabel();
+  drawScreenFade();
 }
 
 function isOnMapScreen() {
@@ -366,6 +432,68 @@ function isWalkable(x, y) {
   }
 
   return true;
+}
+
+function fadeScreenTo(targetAlpha, durationMs) {
+  return new Promise((resolve) => {
+    const startAlpha = screenFadeAlpha;
+    const startTime = performance.now();
+
+    function step(now) {
+      const progress = Math.min(1, (now - startTime) / durationMs);
+      screenFadeAlpha = startAlpha + ((targetAlpha - startAlpha) * progress);
+      draw();
+
+      if (progress < 1) {
+        requestAnimationFrame(step);
+      } else {
+        screenFadeAlpha = targetAlpha;
+        draw();
+        resolve();
+      }
+    }
+
+    requestAnimationFrame(step);
+  });
+}
+
+async function executeMapTransition(warp) {
+  if (isTransitioning) {
+    return;
+  }
+
+  isTransitioning = true;
+  movementEnabled = false;
+  keysHeld.clear();
+  player.isMoving = false;
+  player.walkStartedAt = 0;
+
+  if (typeof closePauseMenu === 'function') {
+    closePauseMenu();
+  }
+
+  await fadeScreenTo(1, TRANSITION_FADE_MS);
+
+  applyWorldMap(warp.toMap);
+  window.currentMapKey = currentMapKey;
+  player.x = warp.toX;
+  player.y = warp.toY;
+  player.direction = DIRECTION.DOWN;
+  player.isMoving = false;
+  player.walkStartedAt = 0;
+
+  await fadeScreenTo(0, TRANSITION_FADE_MS);
+
+  isTransitioning = false;
+  movementEnabled = true;
+  draw();
+}
+
+function checkWarpZones() {
+  const warp = findWarpZone(currentMapKey, player.x, player.y);
+  if (warp) {
+    executeMapTransition(warp);
+  }
 }
 
 function setPlayerDirection(key) {
@@ -405,7 +533,7 @@ function triggerEncounter() {
 }
 
 function tryRandomEncounter() {
-  if (isPaused) {
+  if (isPaused || isTransitioning) {
     return;
   }
 
@@ -434,6 +562,7 @@ function movePlayer(dx, dy) {
     player.x = newX;
     player.y = newY;
     tryRandomEncounter();
+    checkWarpZones();
     return true;
   }
 
@@ -449,7 +578,7 @@ window.onBattleVictory = function () {
 };
 
 document.addEventListener('keydown', (event) => {
-  if (!movementEnabled || isPaused || !isArrowKey(event.key) || keysHeld.has(event.key)) {
+  if (!movementEnabled || isPaused || isTransitioning || !isArrowKey(event.key) || keysHeld.has(event.key)) {
     return;
   }
 
@@ -492,7 +621,7 @@ document.addEventListener('keyup', (event) => {
   if (keysHeld.size === 0) {
     player.isMoving = false;
     player.walkStartedAt = 0;
-    if (!isPaused) {
+    if (!isPaused && !isTransitioning) {
       draw();
     }
   }
@@ -512,3 +641,5 @@ function initGame() {
 }
 
 window.initGame = initGame;
+window.applyWorldMap = applyWorldMap;
+window.executeMapTransition = executeMapTransition;
