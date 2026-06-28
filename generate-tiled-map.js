@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const Jimp = require('jimp');
+const { detectMapCollision } = require('./detect-map-collision');
 
 const TILE_SIZE = 16;
 const DEFAULT_INPUT_IMAGE = 'mockup.png';
@@ -483,6 +484,15 @@ ${csvRows.join('\n')}
     offsetY
   );
 
+  const collisionData = await detectMapCollision({
+    mockupPath: inputPath,
+    logicPath,
+    mapWidth,
+    mapHeight,
+    offsetX,
+    offsetY,
+  });
+
   const levelData = {
     mapId,
     mapName,
@@ -499,9 +509,11 @@ ${csvRows.join('\n')}
     tilesetColumns: columns,
     firstGid: 1,
     layer: buildLayerGrid(mapData, mapWidth, mapHeight),
+    blocked: collisionData.blocked,
     collisionTileIds: [...collisionTileIds].sort((a, b) => a - b),
     damageTileIds: [...damageTileIds].sort((a, b) => a - b),
     spawns: spawnPoints,
+    npcs: collisionData.npcs,
     entityWidth: entityDimensions.entityWidth,
     entityHeight: entityDimensions.entityHeight,
     entityVisualHeight: entityDimensions.entityVisualHeight,
@@ -527,6 +539,10 @@ ${csvRows.join('\n')}
     spawnCount: spawnPoints.length,
     collisionTileCount: collisionTileIds.size,
     damageTileCount: damageTileIds.size,
+    blockedCellCount: collisionData.blockedCount,
+    walkableCellCount: collisionData.walkableCount,
+    npcCount: collisionData.npcs.length,
+    npcCellCount: collisionData.npcCellCount,
     tilesetWidth,
     tilesetHeight,
     mismatches,
@@ -542,6 +558,9 @@ ${csvRows.join('\n')}
   console.log(`Player spawns: ${spawnPoints.length}`);
   console.log(`Collision tiles: ${collisionTileIds.size}`);
   console.log(`Damage tiles: ${damageTileIds.size}`);
+  console.log(`Blocked cells: ${collisionData.blockedCount}`);
+  console.log(`Walkable cells: ${collisionData.walkableCount}`);
+  console.log(`Detected NPCs: ${collisionData.npcs.length}`);
   console.log(`Entity footprint: ${entityDimensions.entityWidth}x${entityDimensions.entityHeight}px`);
   console.log(`Entity visual height: ${entityDimensions.entityVisualHeight}px`);
   console.log(`Reconstruction mismatches: ${mismatches}`);

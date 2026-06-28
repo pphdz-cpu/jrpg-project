@@ -19,6 +19,7 @@ const worldHeight = mapRows * tileSize;
 
 const collisionTileIds = new Set(level ? level.collisionTileIds : []);
 const damageTileIds = new Set(level ? level.damageTileIds : []);
+const blockedCells = level ? level.blocked : null;
 const tilesetColumns = level ? level.tilesetColumns : 1;
 const tilesetFirstGid = level ? level.firstGid : 1;
 const TILESET_PATH = level ? level.tileset : 'assets/map-tileset.png';
@@ -309,6 +310,10 @@ function togglePauseMenu() {
 
 function isWalkable(x, y) {
   if (x < 0 || y < 0 || x >= mapCols || y >= mapRows) {
+    return false;
+  }
+
+  if (blockedCells && blockedCells[y] && blockedCells[y][x]) {
     return false;
   }
 
