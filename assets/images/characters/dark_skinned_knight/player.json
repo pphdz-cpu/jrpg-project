@@ -1,0 +1,17 @@
+{
+  "id": "dark_skinned_knight",
+  "label": "Dark Knight",
+  "frameWidth": 64,
+  "frameHeight": 64,
+  "footprintWidth": 32,
+  "footprintHeight": 16,
+  "visualHeight": 52,
+  "walkFrameCount": 49,
+  "walkFrameDelay": 120,
+  "directionRows": {
+    "0": 2,
+    "1": 1,
+    "2": 3,
+    "3": 0
+  }
+}
