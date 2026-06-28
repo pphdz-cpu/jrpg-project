@@ -7,6 +7,7 @@ if (ctx) {
 
 const ENCOUNTER_CHANCE = 0.15;
 const TRANSITION_FADE_MS = 500;
+const MOVE_STEP_MS = 180;
 
 const baseLevel = window.TILED_LEVEL;
 const SOURCE_TILE_SIZE = baseLevel ? baseLevel.tileWidth : 16;
@@ -140,6 +141,8 @@ window.currentMapKey = currentMapKey;
 const CHARACTER_ID = 'char_001';
 
 const keysHeld = new Set();
+let lastHeldKey = null;
+let lastMoveStepAt = 0;
 
 let movementEnabled = true;
 let assetsReady = false;
@@ -228,14 +231,75 @@ function startAnimationLoop() {
     return;
   }
 
-  function tick() {
-    if (assetsReady && isOnMapScreen() && movementEnabled && !isPaused && !isTransitioning && player.isMoving) {
+  function tick(now) {
+    const frameTime = now || performance.now();
+    const moved = processHeldMovement(frameTime);
+
+    if (assetsReady && isOnMapScreen() && (player.isMoving || moved)) {
       draw();
     }
+
     animationFrameId = requestAnimationFrame(tick);
   }
 
   animationFrameId = requestAnimationFrame(tick);
+}
+
+function getPrimaryHeldKey() {
+  if (lastHeldKey && keysHeld.has(lastHeldKey)) {
+    return lastHeldKey;
+  }
+
+  const [nextKey] = keysHeld;
+  return nextKey || null;
+}
+
+function getMovementDelta(key) {
+  switch (key) {
+    case 'ArrowUp':
+      return { dx: 0, dy: -1 };
+    case 'ArrowDown':
+      return { dx: 0, dy: 1 };
+    case 'ArrowLeft':
+      return { dx: -1, dy: 0 };
+    case 'ArrowRight':
+      return { dx: 1, dy: 0 };
+    default:
+      return null;
+  }
+}
+
+function processHeldMovement(now) {
+  if (!movementEnabled || isPaused || isTransitioning || keysHeld.size === 0) {
+    return false;
+  }
+
+  const key = getPrimaryHeldKey();
+  if (!key) {
+    return false;
+  }
+
+  if (now - lastMoveStepAt < MOVE_STEP_MS) {
+    player.isMoving = true;
+    return false;
+  }
+
+  const delta = getMovementDelta(key);
+  if (!delta) {
+    return false;
+  }
+
+  setPlayerDirection(key);
+  player.isMoving = true;
+
+  const moved = movePlayer(delta.dx, delta.dy);
+  lastMoveStepAt = now;
+
+  if (!moved) {
+    player.isMoving = keysHeld.size > 0;
+  }
+
+  return moved;
 }
 
 function drawMapFallback(message, detail) {
@@ -465,6 +529,8 @@ async function executeMapTransition(warp) {
   isTransitioning = true;
   movementEnabled = false;
   keysHeld.clear();
+  lastHeldKey = null;
+  lastMoveStepAt = 0;
   player.isMoving = false;
   player.walkStartedAt = 0;
 
@@ -582,29 +648,22 @@ document.addEventListener('keydown', (event) => {
     return;
   }
 
-  if (keysHeld.size === 0) {
-    player.walkStartedAt = performance.now();
+  const now = performance.now();
+  keysHeld.add(event.key);
+  lastHeldKey = event.key;
+
+  if (keysHeld.size === 1) {
+    player.walkStartedAt = now;
+    lastMoveStepAt = 0;
   }
 
-  keysHeld.add(event.key);
   player.isMoving = true;
   setPlayerDirection(event.key);
 
-  switch (event.key) {
-    case 'ArrowUp':
-      movePlayer(0, -1);
-      break;
-    case 'ArrowDown':
-      movePlayer(0, 1);
-      break;
-    case 'ArrowLeft':
-      movePlayer(-1, 0);
-      break;
-    case 'ArrowRight':
-      movePlayer(1, 0);
-      break;
-    default:
-      break;
+  const delta = getMovementDelta(event.key);
+  if (delta) {
+    movePlayer(delta.dx, delta.dy);
+    lastMoveStepAt = now;
   }
 
   draw();
@@ -618,13 +677,31 @@ document.addEventListener('keyup', (event) => {
 
   keysHeld.delete(event.key);
 
+  if (event.key === lastHeldKey) {
+    lastHeldKey = getPrimaryHeldKey();
+  }
+
   if (keysHeld.size === 0) {
     player.isMoving = false;
     player.walkStartedAt = 0;
+    lastMoveStepAt = 0;
     if (!isPaused && !isTransitioning) {
       draw();
     }
+    return;
   }
+
+  player.isMoving = true;
+  player.walkStartedAt = performance.now();
+  lastMoveStepAt = 0;
+});
+
+window.addEventListener('blur', () => {
+  keysHeld.clear();
+  lastHeldKey = null;
+  lastMoveStepAt = 0;
+  player.isMoving = false;
+  player.walkStartedAt = 0;
 });
 
 function initGame() {
