@@ -1,4 +1,7 @@
 window.TILED_LEVEL = {
+  "mapId": "town",
+  "zoneType": "town",
+  "isSafeZone": true,
   "tileWidth": 16,
   "displayTileSize": 32,
   "width": 80,

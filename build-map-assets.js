@@ -48,6 +48,9 @@ async function main() {
     displayTileSize: 32,
     offsetX: 0,
     offsetY: 0,
+    mapId: 'town',
+    zoneType: 'town',
+    isSafeZone: true,
   });
 }
 

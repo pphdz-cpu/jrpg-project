@@ -448,6 +448,11 @@ ${csvRows.join('\n')}
   );
 
   const levelData = {
+    mapId: options.mapId || 'town',
+    zoneType: options.zoneType || 'town',
+    isSafeZone: typeof options.isSafeZone === 'boolean'
+      ? options.isSafeZone
+      : (options.zoneType || 'town') === 'town',
     tileWidth: TILE_SIZE,
     displayTileSize: options.displayTileSize || 32,
     width: mapWidth,

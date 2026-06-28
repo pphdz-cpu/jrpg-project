@@ -417,6 +417,10 @@ function tryRandomEncounter() {
     return;
   }
 
+  if (!GameState.canTriggerEncounters()) {
+    return;
+  }
+
   const gid = map[player.y][player.x];
   const localTileId = gidToLocalTileId(gid);
 
