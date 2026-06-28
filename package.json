@@ -4,7 +4,8 @@
   "description": "Generate a Tiled tileset and map from a pixel-art mockup image",
   "main": "generate-tiled-map.js",
   "scripts": {
-    "generate": "node generate-tiled-map.js"
+    "generate": "node generate-tiled-map.js",
+    "build:map": "node build-map-assets.js"
   },
   "dependencies": {
     "jimp": "^0.22.12"

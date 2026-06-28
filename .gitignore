@@ -1,5 +1,5 @@
 node_modules/
-mockup.png
-logic.png
-tileset.png
-level.tmx
+/assets/mockup.png
+/logic.png
+/tileset.png
+/level.tmx

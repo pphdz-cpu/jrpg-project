@@ -4,10 +4,10 @@ const path = require('path');
 const Jimp = require('jimp');
 
 const TILE_SIZE = 16;
-const INPUT_IMAGE = 'mockup.png';
-const LOGIC_IMAGE = 'logic.png';
-const TILESET_IMAGE = 'tileset.png';
-const OUTPUT_MAP = 'level.tmx';
+const DEFAULT_INPUT_IMAGE = 'mockup.png';
+const DEFAULT_LOGIC_IMAGE = 'logic.png';
+const DEFAULT_TILESET_IMAGE = 'tileset.png';
+const DEFAULT_OUTPUT_MAP = 'level.tmx';
 
 function tileHash(tile) {
   return crypto.createHash('sha256').update(tile.bitmap.data).digest('hex');
@@ -116,9 +116,31 @@ function buildObjectsLayerXml(spawnPoints) {
   return `\n <objectgroup id="2" name="Objects">\n${objects}\n </objectgroup>`;
 }
 
-async function main() {
-  const inputPath = path.resolve(INPUT_IMAGE);
-  const logicPath = path.resolve(LOGIC_IMAGE);
+function buildLayerGrid(mapData, mapWidth, mapHeight) {
+  const layer = [];
+
+  for (let row = 0; row < mapHeight; row += 1) {
+    layer.push(mapData.slice(row * mapWidth, (row + 1) * mapWidth));
+  }
+
+  return layer;
+}
+
+function writeLevelJs(outputPath, levelData) {
+  const content = `window.TILED_LEVEL = ${JSON.stringify(levelData, null, 2)};\n`;
+  fs.writeFileSync(outputPath, content, 'utf8');
+}
+
+async function generateTiledMap(options = {}) {
+  const inputImage = options.inputImage || DEFAULT_INPUT_IMAGE;
+  const logicImage = options.logicImage || DEFAULT_LOGIC_IMAGE;
+  const tilesetImage = options.tilesetImage || DEFAULT_TILESET_IMAGE;
+  const outputMap = options.outputMap || DEFAULT_OUTPUT_MAP;
+  const outputJs = options.outputJs || null;
+  const tilesetSourceInTmx = options.tilesetSourceInTmx || path.basename(tilesetImage);
+
+  const inputPath = path.resolve(inputImage);
+  const logicPath = path.resolve(logicImage);
 
   if (!fs.existsSync(inputPath)) {
     throw new Error(`Input image not found: ${inputPath}`);
@@ -134,7 +156,7 @@ async function main() {
 
   if (logic.bitmap.width !== width || logic.bitmap.height !== height) {
     throw new Error(
-      `${LOGIC_IMAGE} must match ${INPUT_IMAGE} dimensions. Got ${logic.bitmap.width}x${logic.bitmap.height}, expected ${width}x${height}.`
+      `${logicImage} must match ${inputImage} dimensions. Got ${logic.bitmap.width}x${logic.bitmap.height}, expected ${width}x${height}.`
     );
   }
 
@@ -161,6 +183,7 @@ async function main() {
 
       if (logicType === 'spawn') {
         spawnPoints.push({
+          name: 'PlayerSpawn',
           x: col * TILE_SIZE,
           y: row * TILE_SIZE,
         });
@@ -204,7 +227,7 @@ async function main() {
     tileset.composite(tile, tileCol * TILE_SIZE, tileRow * TILE_SIZE);
   });
 
-  await tileset.writeAsync(TILESET_IMAGE);
+  await tileset.writeAsync(tilesetImage);
 
   const csvRows = [];
   for (let row = 0; row < mapHeight; row += 1) {
@@ -220,7 +243,7 @@ async function main() {
   const tmx = `<?xml version="1.0" encoding="UTF-8"?>
 <map version="1.10" tiledversion="1.10.2" orientation="orthogonal" renderorder="right-down" width="${mapWidth}" height="${mapHeight}" tilewidth="${TILE_SIZE}" tileheight="${TILE_SIZE}" infinite="0" nextlayerid="${nextLayerId}" nextobjectid="${nextObjectId}">
  <tileset firstgid="1" name="tileset" tilewidth="${TILE_SIZE}" tileheight="${TILE_SIZE}" tilecount="${tileCount}" columns="${columns}">
-  <image source="${escapeXml(TILESET_IMAGE)}" width="${tilesetWidth}" height="${tilesetHeight}"/>${tileMetadataXml}
+  <image source="${escapeXml(tilesetSourceInTmx)}" width="${tilesetWidth}" height="${tilesetHeight}"/>${tileMetadataXml}
  </tileset>
  <layer id="1" name="Ground" width="${mapWidth}" height="${mapHeight}">
   <data encoding="csv">
@@ -230,20 +253,69 @@ ${csvRows.join(',\n')}
 </map>
 `;
 
-  fs.writeFileSync(OUTPUT_MAP, tmx, 'utf8');
+  fs.writeFileSync(outputMap, tmx, 'utf8');
 
-  console.log(`Read ${INPUT_IMAGE} (${width}x${height})`);
-  console.log(`Read ${LOGIC_IMAGE} (${width}x${height})`);
+  const levelData = {
+    tileWidth: TILE_SIZE,
+    displayTileSize: options.displayTileSize || 32,
+    width: mapWidth,
+    height: mapHeight,
+    tileset: options.tilesetPublicPath || tilesetImage.replace(/\\/g, '/'),
+    tilesetColumns: columns,
+    firstGid: 1,
+    layer: buildLayerGrid(mapData, mapWidth, mapHeight),
+    collisionTileIds: [...collisionTileIds].sort((a, b) => a - b),
+    damageTileIds: [...damageTileIds].sort((a, b) => a - b),
+    spawns: spawnPoints,
+  };
+
+  if (outputJs) {
+    writeLevelJs(outputJs, levelData);
+  }
+
+  const summary = {
+    inputImage,
+    logicImage,
+    tilesetImage,
+    outputMap,
+    outputJs,
+    width,
+    height,
+    mapWidth,
+    mapHeight,
+    tileCount,
+    spawnCount: spawnPoints.length,
+    collisionTileCount: collisionTileIds.size,
+    damageTileCount: damageTileIds.size,
+    tilesetWidth,
+    tilesetHeight,
+    levelData,
+  };
+
+  console.log(`Read ${inputImage} (${width}x${height})`);
+  console.log(`Read ${logicImage} (${width}x${height})`);
   console.log(`Map size: ${mapWidth}x${mapHeight} tiles`);
   console.log(`Unique tiles: ${tileCount}`);
   console.log(`Player spawns: ${spawnPoints.length}`);
   console.log(`Collision tiles: ${collisionTileIds.size}`);
   console.log(`Damage tiles: ${damageTileIds.size}`);
-  console.log(`Wrote ${TILESET_IMAGE} (${tilesetWidth}x${tilesetHeight})`);
-  console.log(`Wrote ${OUTPUT_MAP}`);
+  console.log(`Wrote ${tilesetImage} (${tilesetWidth}x${tilesetHeight})`);
+  console.log(`Wrote ${outputMap}`);
+  if (outputJs) {
+    console.log(`Wrote ${outputJs}`);
+  }
+
+  return summary;
 }
 
-main().catch((error) => {
-  console.error(error.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  generateTiledMap().catch((error) => {
+    console.error(error.message);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  TILE_SIZE,
+  generateTiledMap,
+};
