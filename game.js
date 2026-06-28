@@ -59,6 +59,7 @@ const player = {
   y: initialPlayerPosition.y,
   direction: DIRECTION.DOWN,
   isMoving: false,
+  walkStartedAt: 0,
 };
 
 const CHARACTER_ID = 'char_001';
@@ -432,6 +433,10 @@ document.addEventListener('keydown', (event) => {
     return;
   }
 
+  if (keysHeld.size === 0) {
+    player.walkStartedAt = performance.now();
+  }
+
   keysHeld.add(event.key);
   player.isMoving = true;
   setPlayerDirection(event.key);
@@ -466,6 +471,7 @@ document.addEventListener('keyup', (event) => {
 
   if (keysHeld.size === 0) {
     player.isMoving = false;
+    player.walkStartedAt = 0;
     if (!isPaused) {
       draw();
     }

@@ -13,6 +13,8 @@ const DEFAULT_PLAYER_META = {
   footprintWidth: 32,
   footprintHeight: 16,
   visualHeight: 52,
+  walkFrameCount: 9,
+  walkFrameDelay: 120,
   directionRows: {
     0: 2,
     1: 1,
@@ -27,6 +29,8 @@ const DEFAULT_NPC_META = {
   footprintWidth: 32,
   footprintHeight: 16,
   visualHeight: 52,
+  walkFrameCount: 9,
+  walkFrameDelay: 120,
   directionRows: DEFAULT_PLAYER_META.directionRows,
 };
 
@@ -41,10 +45,10 @@ const CharacterAssets = {
 
   paths: {
     playerIdle: `${CHARACTER_ROOT}/player_idle.png`,
-    playerWalk: `${CHARACTER_ROOT}/chain_armor.gif`,
+    playerWalk: `${CHARACTER_ROOT}/player_walk.png`,
     playerMeta: `${CHARACTER_ROOT}/player.json`,
     npc: (id) => `${CHARACTER_ROOT}/npc_${id}.png`,
-    npcWalk: (id) => `${CHARACTER_ROOT}/npc_${id}.gif`,
+    npcWalk: (id) => `${CHARACTER_ROOT}/npc_${id}_walk.png`,
   },
 };
 
@@ -74,10 +78,24 @@ function getDirectionRow(direction, meta) {
   return meta.directionRows[direction] ?? meta.directionRows[DIRECTION.DOWN];
 }
 
-function getIdleFrameRect(direction, meta) {
+function getWalkFrameIndex(meta, walkStartedAt) {
+  if (!walkStartedAt) {
+    return 0;
+  }
+
+  const elapsed = performance.now() - walkStartedAt;
+  const frame = Math.floor(elapsed / meta.walkFrameDelay);
+  return frame % meta.walkFrameCount;
+}
+
+function getSpriteFrameRect(direction, meta, options = {}) {
   const row = getDirectionRow(direction, meta);
+  const frameIndex = options.isMoving
+    ? getWalkFrameIndex(meta, options.walkStartedAt)
+    : 0;
+
   return {
-    sx: 0,
+    sx: frameIndex * meta.frameWidth,
     sy: row * meta.frameHeight,
     sw: meta.frameWidth,
     sh: meta.frameHeight,
@@ -85,66 +103,67 @@ function getIdleFrameRect(direction, meta) {
 }
 
 function getDrawDimensions(rect, meta, tileSize, sourceTileSize) {
-  const displayScale = tileSize / sourceTileSize;
-  const targetHeight = meta.visualHeight * displayScale;
-  const targetWidth = targetHeight * (rect.sw / rect.sh);
+  const pixelScale = tileSize / sourceTileSize;
+  const targetHeight = Math.round(meta.visualHeight * pixelScale);
+  const targetWidth = Math.round(targetHeight * (rect.sw / rect.sh));
 
   return {
     targetWidth,
     targetHeight,
-    footprintWidth: meta.footprintWidth * displayScale,
-    footprintHeight: meta.footprintHeight * displayScale,
+    footprintWidth: Math.round(meta.footprintWidth * pixelScale),
+    footprintHeight: Math.round(meta.footprintHeight * pixelScale),
   };
 }
 
 function drawCharacterSprite(ctx, options) {
   const {
     image,
+    walkImage,
     direction,
     isMoving,
+    walkStartedAt,
     x,
     y,
     tileSize,
     sourceTileSize,
     meta,
-    walkImage,
   } = options;
 
-  const feetX = x * tileSize + tileSize / 2;
-  const feetY = y * tileSize + tileSize;
-  const idleRect = getIdleFrameRect(direction, meta);
-  const dimensions = getDrawDimensions(idleRect, meta, tileSize, sourceTileSize);
-  const drawX = feetX - dimensions.targetWidth / 2;
-  const drawY = feetY - dimensions.targetHeight;
-
-  if (isMoving && walkImage) {
-    ctx.drawImage(
-      walkImage,
-      drawX,
-      drawY,
-      dimensions.targetWidth,
-      dimensions.targetHeight
+  const spriteImage = (isMoving && walkImage) || image;
+  if (!spriteImage) {
+    const feetX = x * tileSize + tileSize / 2;
+    const feetY = y * tileSize + tileSize;
+    const dimensions = getDrawDimensions(
+      { sw: meta.frameWidth, sh: meta.frameHeight },
+      meta,
+      tileSize,
+      sourceTileSize
     );
-    return;
-  }
 
-  if (!image) {
     ctx.fillStyle = '#1565c0';
     ctx.fillRect(
-      feetX - dimensions.footprintWidth / 2,
-      feetY - dimensions.footprintHeight,
+      Math.round(feetX - dimensions.footprintWidth / 2),
+      Math.round(feetY - dimensions.footprintHeight),
       dimensions.footprintWidth,
       dimensions.footprintHeight
     );
     return;
   }
 
+  const frameRect = getSpriteFrameRect(direction, meta, { isMoving: isMoving && Boolean(walkImage), walkStartedAt });
+  const dimensions = getDrawDimensions(frameRect, meta, tileSize, sourceTileSize);
+  const feetX = x * tileSize + tileSize / 2;
+  const feetY = y * tileSize + tileSize;
+  const drawX = Math.round(feetX - dimensions.targetWidth / 2);
+  const drawY = Math.round(feetY - dimensions.targetHeight);
+
+  ctx.imageSmoothingEnabled = false;
   ctx.drawImage(
-    image,
-    idleRect.sx,
-    idleRect.sy,
-    idleRect.sw,
-    idleRect.sh,
+    spriteImage,
+    frameRect.sx,
+    frameRect.sy,
+    frameRect.sw,
+    frameRect.sh,
     drawX,
     drawY,
     dimensions.targetWidth,
@@ -219,6 +238,7 @@ function drawPlayerCharacter(ctx, player, tileSize, sourceTileSize) {
     walkImage: CharacterAssets.images.playerWalk,
     direction: player.direction,
     isMoving: player.isMoving,
+    walkStartedAt: player.walkStartedAt,
     x: player.x,
     y: player.y,
     tileSize,
@@ -243,6 +263,7 @@ function drawNpcs(ctx, npcs, tileSize, sourceTileSize) {
       walkImage: asset.walk,
       direction: npc.direction || DIRECTION.DOWN,
       isMoving: Boolean(npc.isMoving),
+      walkStartedAt: npc.walkStartedAt,
       x: npc.x,
       y: npc.y,
       tileSize,

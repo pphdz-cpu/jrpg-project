@@ -11,5 +11,8 @@
   },
   "dependencies": {
     "jimp": "^0.22.12"
+  },
+  "devDependencies": {
+    "gifuct-js": "^2.1.2"
   }
 }
