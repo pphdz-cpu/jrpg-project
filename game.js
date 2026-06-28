@@ -43,16 +43,46 @@ const camera = {
 };
 
 function getInitialPlayerPosition() {
-  const spawn = level && level.spawns && level.spawns.find((entry) => entry.name === 'PlayerSpawn');
+  const spawns = level && level.spawns
+    ? level.spawns.filter((entry) => entry.name === 'PlayerSpawn')
+    : [];
 
-  if (spawn) {
-    return {
-      x: Math.floor((spawn.x - mapOffsetX) / SOURCE_TILE_SIZE),
-      y: Math.floor((spawn.y - mapOffsetY) / SOURCE_TILE_SIZE),
-    };
+  if (spawns.length === 0) {
+    return { x: 1, y: 1 };
   }
 
-  return { x: 1, y: 1 };
+  const candidates = spawns.map((spawn) => ({
+    x: Math.floor((spawn.x - mapOffsetX) / SOURCE_TILE_SIZE),
+    y: Math.floor((spawn.y - mapOffsetY) / SOURCE_TILE_SIZE),
+  }));
+
+  const walkableCandidates = candidates.filter((candidate) => {
+    if (candidate.x < 0 || candidate.y < 0 || candidate.x >= mapCols || candidate.y >= mapRows) {
+      return false;
+    }
+
+    if (blockedCells && blockedCells[candidate.y] && blockedCells[candidate.y][candidate.x]) {
+      return false;
+    }
+
+    return true;
+  });
+
+  const preferred = walkableCandidates.find((candidate) => (
+    !overheadCells
+    || !overheadCells[candidate.y]
+    || !overheadCells[candidate.y][candidate.x]
+  ));
+
+  if (preferred) {
+    return preferred;
+  }
+
+  if (walkableCandidates.length > 0) {
+    return walkableCandidates[walkableCandidates.length - 1];
+  }
+
+  return candidates[0];
 }
 
 const initialPlayerPosition = getInitialPlayerPosition();
@@ -216,10 +246,7 @@ function drawTileMap() {
 
   for (let row = 0; row < mapRows; row += 1) {
     for (let col = 0; col < mapCols; col += 1) {
-      const isSplitCanopy = overheadCells
-        && overheadCells[row]
-        && overheadCells[row][col]
-        && shouldDrawCanopyOverPlayer(col, row);
+      const isSplitCanopy = shouldSplitCanopyTile(col, row);
 
       if (isSplitCanopy) {
         drawTileSlice(col, row, CANOPY_SOURCE_ROWS, SOURCE_TILE_SIZE - CANOPY_SOURCE_ROWS);
@@ -231,6 +258,18 @@ function drawTileMap() {
   }
 }
 
+function shouldSplitCanopyTile(col, row) {
+  if (!overheadCells || !overheadCells[row] || !overheadCells[row][col]) {
+    return false;
+  }
+
+  if (player.x === col && player.y === row) {
+    return false;
+  }
+
+  return shouldDrawCanopyOverPlayer(col, row);
+}
+
 function shouldDrawCanopyOverPlayer(col, row) {
   if (!overheadCells || !overheadCells[row] || !overheadCells[row][col]) {
     return false;
@@ -239,7 +278,7 @@ function shouldDrawCanopyOverPlayer(col, row) {
   const rowDistance = player.y - row;
   const colDistance = Math.abs(player.x - col);
 
-  return colDistance <= 1 && rowDistance >= -1 && rowDistance <= 2;
+  return colDistance <= 1 && rowDistance >= 0 && rowDistance <= 2;
 }
 
 function drawOverheadCanopies() {

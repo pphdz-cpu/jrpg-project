@@ -90,9 +90,8 @@ function getWalkFrameIndex(meta, walkStartedAt) {
 
 function getSpriteFrameRect(direction, meta, options = {}) {
   const row = getDirectionRow(direction, meta);
-  const frameIndex = options.isMoving
-    ? getWalkFrameIndex(meta, options.walkStartedAt)
-    : 0;
+  const moving = Boolean(options.isMoving && options.useWalkSheet);
+  const frameIndex = moving ? getWalkFrameIndex(meta, options.walkStartedAt) : 0;
 
   return {
     sx: frameIndex * meta.frameWidth,
@@ -129,12 +128,17 @@ function drawCharacterSprite(ctx, options) {
     meta,
   } = options;
 
-  const spriteImage = (isMoving && walkImage) || image;
+  const useWalkSheet = Boolean(walkImage);
+  const spriteImage = useWalkSheet ? walkImage : image;
   if (!spriteImage) {
     return;
   }
 
-  const frameRect = getSpriteFrameRect(direction, meta, { isMoving: isMoving && Boolean(walkImage), walkStartedAt });
+  const frameRect = getSpriteFrameRect(direction, meta, {
+    isMoving: isMoving && useWalkSheet,
+    useWalkSheet,
+    walkStartedAt,
+  });
   const dimensions = getDrawDimensions(frameRect, meta, tileSize, sourceTileSize);
   const feetX = x * tileSize + tileSize / 2;
   const feetY = y * tileSize + tileSize;
