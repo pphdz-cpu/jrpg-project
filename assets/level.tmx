@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <map version="1.10" tiledversion="1.10.2" orientation="orthogonal" renderorder="right-down" width="80" height="80" tilewidth="16" tileheight="16" infinite="0" nextlayerid="3" nextobjectid="7">
+ <properties>
+  <property name="mapId" type="string" value="starter_town"/>
+  <property name="mapName" type="string" value="Starter Town"/>
+  <property name="zoneType" type="string" value="town"/>
+  <property name="isSafeZone" type="bool" value="true"/>
+  <property name="isStarterTown" type="bool" value="true"/>
+ </properties>
  <tileset firstgid="1" name="tileset" tilewidth="16" tileheight="16" tilecount="2831" columns="54" margin="0" spacing="0">
   <image source="map-tileset.png" width="864" height="848"/>
   <tile id="188">

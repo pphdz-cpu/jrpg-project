@@ -115,6 +115,26 @@ function buildTileMetadataXml(collisionTileIds, damageTileIds, entityWidth, enti
   return `\n${tileBlocks.join('\n')}`;
 }
 
+function buildMapPropertiesXml(mapMeta) {
+  const properties = [
+    { name: 'mapId', type: 'string', value: mapMeta.mapId },
+    { name: 'mapName', type: 'string', value: mapMeta.mapName },
+    { name: 'zoneType', type: 'string', value: mapMeta.zoneType },
+    { name: 'isSafeZone', type: 'bool', value: mapMeta.isSafeZone ? 'true' : 'false' },
+  ];
+
+  if (mapMeta.isStarterTown) {
+    properties.push({ name: 'isStarterTown', type: 'bool', value: 'true' });
+  }
+
+  const propertyLines = properties.map(
+    (property) =>
+      `  <property name="${escapeXml(property.name)}" type="${property.type}" value="${escapeXml(property.value)}"/>`
+  );
+
+  return `\n <properties>\n${propertyLines.join('\n')}\n </properties>`;
+}
+
 function buildObjectsLayerXml(spawnPoints, entityWidth, entityHeight) {
   if (spawnPoints.length === 0) {
     return '';
@@ -421,8 +441,24 @@ async function generateTiledMap(options = {}) {
   const nextLayerId = spawnPoints.length > 0 ? 3 : 2;
   const nextObjectId = spawnPoints.length + 1;
 
+  const mapId = options.mapId || 'starter_town';
+  const mapName = options.mapName || 'Starter Town';
+  const zoneType = options.zoneType || 'town';
+  const isSafeZone = typeof options.isSafeZone === 'boolean'
+    ? options.isSafeZone
+    : zoneType === 'town';
+  const isStarterTown = Boolean(options.isStarterTown);
+
+  const mapPropertiesXml = buildMapPropertiesXml({
+    mapId,
+    mapName,
+    zoneType,
+    isSafeZone,
+    isStarterTown,
+  });
+
   const tmx = `<?xml version="1.0" encoding="UTF-8"?>
-<map version="1.10" tiledversion="1.10.2" orientation="orthogonal" renderorder="right-down" width="${mapWidth}" height="${mapHeight}" tilewidth="${TILE_SIZE}" tileheight="${TILE_SIZE}" infinite="0" nextlayerid="${nextLayerId}" nextobjectid="${nextObjectId}">
+<map version="1.10" tiledversion="1.10.2" orientation="orthogonal" renderorder="right-down" width="${mapWidth}" height="${mapHeight}" tilewidth="${TILE_SIZE}" tileheight="${TILE_SIZE}" infinite="0" nextlayerid="${nextLayerId}" nextobjectid="${nextObjectId}">${mapPropertiesXml}
  <tileset firstgid="1" name="tileset" tilewidth="${TILE_SIZE}" tileheight="${TILE_SIZE}" tilecount="${tileCount}" columns="${columns}" margin="0" spacing="0">
   <image source="${escapeXml(tilesetSourceInTmx)}" width="${tilesetWidth}" height="${tilesetHeight}"/>${tileMetadataXml}
  </tileset>
@@ -448,11 +484,11 @@ ${csvRows.join('\n')}
   );
 
   const levelData = {
-    mapId: options.mapId || 'town',
-    zoneType: options.zoneType || 'town',
-    isSafeZone: typeof options.isSafeZone === 'boolean'
-      ? options.isSafeZone
-      : (options.zoneType || 'town') === 'town',
+    mapId,
+    mapName,
+    zoneType,
+    isSafeZone,
+    isStarterTown,
     tileWidth: TILE_SIZE,
     displayTileSize: options.displayTileSize || 32,
     width: mapWidth,

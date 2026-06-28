@@ -10,6 +10,14 @@ const TILESET_PATH = path.join(ASSETS_DIR, 'map-tileset.png');
 const TMX_PATH = path.join(ASSETS_DIR, 'level.tmx');
 const LEVEL_JS_PATH = path.join(ASSETS_DIR, 'level.js');
 
+const STARTER_TOWN = {
+  mapId: 'starter_town',
+  mapName: 'Starter Town',
+  zoneType: 'town',
+  isSafeZone: true,
+  isStarterTown: true,
+};
+
 function resolveLogicPath() {
   if (fs.existsSync(LOGIC_PATH)) {
     return LOGIC_PATH;
@@ -48,10 +56,11 @@ async function main() {
     displayTileSize: 32,
     offsetX: 0,
     offsetY: 0,
-    mapId: 'town',
-    zoneType: 'town',
-    isSafeZone: true,
+    ...STARTER_TOWN,
   });
+
+  console.log(`Tagged ${MOCKUP_PATH} as "${STARTER_TOWN.mapName}" (${STARTER_TOWN.mapId})`);
+  console.log('Safe zone: random encounters disabled');
 }
 
 main().catch((error) => {

@@ -6,9 +6,11 @@ const ZONE_TYPES = {
 const SAFE_ZONE_TYPES = new Set([ZONE_TYPES.TOWN]);
 
 const GameState = {
-  mapId: 'town',
+  mapId: 'starter_town',
+  mapName: 'Starter Town',
   zoneType: ZONE_TYPES.TOWN,
   isSafeZone: true,
+  isStarterTown: true,
 
   applyMap(levelData) {
     if (!levelData) {
@@ -16,7 +18,9 @@ const GameState = {
     }
 
     this.mapId = levelData.mapId || 'unknown';
+    this.mapName = levelData.mapName || this.mapId;
     this.zoneType = levelData.zoneType || ZONE_TYPES.OVERWORLD;
+    this.isStarterTown = Boolean(levelData.isStarterTown);
 
     if (typeof levelData.isSafeZone === 'boolean') {
       this.isSafeZone = levelData.isSafeZone;
