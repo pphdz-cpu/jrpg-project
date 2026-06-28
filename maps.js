@@ -19,13 +19,17 @@ function getRegisteredMap(mapId) {
 }
 
 function getSavedMapId() {
-  const savedMapId = sessionStorage.getItem(MAP_STORAGE_KEY);
+  try {
+    const savedMapId = sessionStorage.getItem(MAP_STORAGE_KEY);
 
-  if (savedMapId === 'town') {
-    return 'starter_town';
+    if (savedMapId === 'town') {
+      return 'starter_town';
+    }
+
+    return savedMapId || DEFAULT_MAP_ID;
+  } catch (storageError) {
+    return DEFAULT_MAP_ID;
   }
-
-  return savedMapId || DEFAULT_MAP_ID;
 }
 
 function resolveActiveMap() {
@@ -52,7 +56,12 @@ window.transitionToMapById = function transitionToMapById(mapId) {
     throw new Error(`Unknown map id "${mapId}". Add it to MAP_REGISTRY in maps.js.`);
   }
 
-  sessionStorage.setItem(MAP_STORAGE_KEY, resolvedMapId);
+  try {
+    sessionStorage.setItem(MAP_STORAGE_KEY, resolvedMapId);
+  } catch (storageError) {
+    // Ignore storage failures (e.g. some file:// contexts).
+  }
+
   window.transitionToMap(mapData);
 };
 

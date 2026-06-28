@@ -21,7 +21,6 @@ const collisionTileIds = new Set(level ? level.collisionTileIds : []);
 const damageTileIds = new Set(level ? level.damageTileIds : []);
 const blockedCells = level ? level.blocked : null;
 const overheadCells = level ? level.overhead : null;
-const CANOPY_SOURCE_ROWS = 10;
 const tilesetColumns = level ? level.tilesetColumns : 1;
 const tilesetFirstGid = level ? level.firstGid : 1;
 const TILESET_PATH = level ? level.tileset : 'assets/map-tileset.png';
@@ -30,7 +29,7 @@ const entityFootprintHeight = level && level.entityHeight ? level.entityHeight :
 const entityVisualHeight = level && level.entityVisualHeight ? level.entityVisualHeight : SOURCE_TILE_SIZE * 2;
 const mapOffsetX = level && level.offsetX ? level.offsetX : 0;
 const mapOffsetY = level && level.offsetY ? level.offsetY : 0;
-const mapNpcs = (level && level.npcs) || [];
+const CANOPY_SOURCE_ROWS = 10;
 
 let tilesetImage = null;
 let tilesetLoadError = null;
@@ -48,6 +47,10 @@ function getInitialPlayerPosition() {
     : [];
 
   if (spawns.length === 0) {
+    return { x: 1, y: 1 };
+  }
+
+  if (mapCols === 0 || mapRows === 0) {
     return { x: 1, y: 1 };
   }
 

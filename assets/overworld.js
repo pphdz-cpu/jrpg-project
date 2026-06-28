@@ -1,3 +1,7 @@
+function createEmptyGrid(width, height) {
+  return Array.from({ length: height }, () => Array(width).fill(0));
+}
+
 window.TILED_LEVEL_OVERWORLD = {
   mapId: 'overworld',
   zoneType: 'overworld',
@@ -30,6 +34,8 @@ window.TILED_LEVEL_OVERWORLD = {
   ],
   collisionTileIds: [],
   damageTileIds: [],
+  blocked: createEmptyGrid(20, 15),
+  overhead: createEmptyGrid(20, 15),
   spawns: [
     {
       name: 'PlayerSpawn',
