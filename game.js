@@ -6,9 +6,7 @@ if (ctx) {
 }
 
 const ENCOUNTER_CHANCE = 0.15;
-const WALK_FRAMES = 4;
-const CHARACTER_SHEET_PATH = window.CHARACTER_SPRITE_SHEET || 'assets/character_sheet_processed.png';
-const CHARACTER_FALLBACK_PATH = 'assets/character_sheet.png';
+const CHARACTER_ROOT = 'assets/images/characters';
 
 const level = window.TILED_LEVEL;
 const SOURCE_TILE_SIZE = level ? level.tileWidth : 16;
@@ -30,37 +28,9 @@ const entityFootprintHeight = level && level.entityHeight ? level.entityHeight :
 const entityVisualHeight = level && level.entityVisualHeight ? level.entityVisualHeight : SOURCE_TILE_SIZE * 2;
 const mapOffsetX = level && level.offsetX ? level.offsetX : 0;
 const mapOffsetY = level && level.offsetY ? level.offsetY : 0;
-const displayScale = tileSize / SOURCE_TILE_SIZE;
-
-const SPRITE_FRAMES = window.CHARACTER_FRAMES || {
-  0: [
-    { sx: 341, sy: 28, sw: 341, sh: 484 },
-    { sx: 682, sy: 28, sw: 341, sh: 484 },
-    { sx: 1023, sy: 28, sw: 341, sh: 484 },
-    { sx: 1364, sy: 28, sw: 341, sh: 477 },
-  ],
-  1: [
-    { sx: 341, sy: 1552, sw: 341, sh: 472 },
-    { sx: 682, sy: 1600, sw: 311, sh: 423 },
-    { sx: 1111, sy: 1599, sw: 178, sh: 425 },
-    { sx: 1400, sy: 1600, sw: 305, sh: 424 },
-  ],
-  2: [
-    { sx: 341, sy: 1040, sw: 341, sh: 481 },
-    { sx: 682, sy: 1097, sw: 295, sh: 424 },
-    { sx: 1096, sy: 1095, sw: 185, sh: 426 },
-    { sx: 1392, sy: 1097, sw: 313, sh: 424 },
-  ],
-  3: [
-    { sx: 341, sy: 512, sw: 341, sh: 497 },
-    { sx: 682, sy: 512, sw: 319, sh: 497 },
-    { sx: 1057, sy: 512, sw: 307, sh: 497 },
-    { sx: 1364, sy: 585, sw: 341, sh: 424 },
-  ],
-};
+const mapNpcs = (level && level.npcs) || [];
 
 let tilesetImage = null;
-let characterSheet = null;
 
 const camera = {
   x: 0,
@@ -87,8 +57,7 @@ const initialPlayerPosition = getInitialPlayerPosition();
 const player = {
   x: initialPlayerPosition.x,
   y: initialPlayerPosition.y,
-  direction: 0,
-  currentFrame: 0,
+  direction: DIRECTION.DOWN,
   isMoving: false,
 };
 
@@ -108,6 +77,7 @@ const keysHeld = new Set();
 let movementEnabled = true;
 let assetsReady = false;
 let isPaused = false;
+let animationFrameId = null;
 
 function loadImage(src) {
   return new Promise((resolve, reject) => {
@@ -133,42 +103,19 @@ function preloadAssets(onComplete) {
     return;
   }
 
-  let loadedCount = 0;
-  const totalAssets = 2;
-
-  function checkComplete() {
-    loadedCount += 1;
-
-    if (loadedCount === totalAssets) {
+  Promise.all([
+    loadImage(TILESET_PATH).then((image) => {
+      tilesetImage = image;
+    }),
+    preloadCharacterAssets(level),
+  ])
+    .catch((error) => {
+      console.error(error.message);
+    })
+    .finally(() => {
       assetsReady = true;
       onComplete();
-    }
-  }
-
-  loadImage(TILESET_PATH)
-    .then((image) => {
-      tilesetImage = image;
-    })
-    .catch(() => {
-      console.error(`Failed to load asset: ${TILESET_PATH}`);
-    })
-    .finally(checkComplete);
-
-  loadImage(CHARACTER_SHEET_PATH)
-    .then((sheet) => {
-      characterSheet = sheet;
-    })
-    .catch(() => {
-      console.error(`Failed to load asset: ${CHARACTER_SHEET_PATH}`);
-      return loadImage(CHARACTER_FALLBACK_PATH)
-        .then((image) => {
-          characterSheet = image;
-        })
-        .catch(() => {
-          console.error(`Failed to load asset: ${CHARACTER_FALLBACK_PATH}`);
-        });
-    })
-    .finally(checkComplete);
+    });
 }
 
 function updateCamera() {
@@ -188,44 +135,22 @@ function updateCamera() {
 }
 
 function drawPlayer() {
-  const feetX = player.x * tileSize + tileSize / 2;
-  const feetY = player.y * tileSize + tileSize;
+  drawPlayerCharacter(ctx, player, tileSize, SOURCE_TILE_SIZE);
+}
 
-  if (!characterSheet) {
-    const drawWidth = entityFootprintWidth * displayScale;
-    const drawHeight = entityVisualHeight * displayScale;
-    ctx.fillStyle = '#1565c0';
-    ctx.fillRect(feetX - drawWidth / 2, feetY - drawHeight, drawWidth, drawHeight);
+function startAnimationLoop() {
+  if (animationFrameId) {
     return;
   }
 
-  const frames = SPRITE_FRAMES[player.direction];
-  const rect = frames && frames[player.currentFrame];
-
-  if (!rect) {
-    const drawWidth = entityFootprintWidth * displayScale;
-    const drawHeight = entityVisualHeight * displayScale;
-    ctx.fillStyle = '#1565c0';
-    ctx.fillRect(feetX - drawWidth / 2, feetY - drawHeight, drawWidth, drawHeight);
-    return;
+  function tick() {
+    if (assetsReady && isOnMapScreen() && movementEnabled && !isPaused && player.isMoving) {
+      draw();
+    }
+    animationFrameId = requestAnimationFrame(tick);
   }
 
-  const targetHeight = entityVisualHeight * displayScale;
-  const targetWidth = targetHeight * (rect.sw / rect.sh);
-  const drawX = feetX - targetWidth / 2;
-  const drawY = feetY - targetHeight;
-
-  ctx.drawImage(
-    characterSheet,
-    rect.sx,
-    rect.sy,
-    rect.sw,
-    rect.sh,
-    drawX,
-    drawY,
-    targetWidth,
-    targetHeight
-  );
+  animationFrameId = requestAnimationFrame(tick);
 }
 
 function drawMapFallback(message) {
@@ -299,6 +224,7 @@ function draw() {
   ctx.translate(-camera.x, -camera.y);
   ctx.imageSmoothingEnabled = false;
   drawTileMap();
+  drawNpcs(ctx, mapNpcs, tileSize, SOURCE_TILE_SIZE);
   drawPlayer();
   ctx.restore();
 }
@@ -381,16 +307,16 @@ function isWalkable(x, y) {
 function setPlayerDirection(key) {
   switch (key) {
     case 'ArrowDown':
-      player.direction = 0;
+      player.direction = DIRECTION.DOWN;
       break;
     case 'ArrowLeft':
-      player.direction = 1;
+      player.direction = DIRECTION.LEFT;
       break;
     case 'ArrowRight':
-      player.direction = 2;
+      player.direction = DIRECTION.RIGHT;
       break;
     case 'ArrowUp':
-      player.direction = 3;
+      player.direction = DIRECTION.UP;
       break;
     default:
       break;
@@ -441,7 +367,6 @@ function movePlayer(dx, dy) {
   if (isWalkable(newX, newY)) {
     player.x = newX;
     player.y = newY;
-    player.currentFrame = (player.currentFrame + 1) % WALK_FRAMES;
     tryRandomEncounter();
     return true;
   }
@@ -520,7 +445,6 @@ document.addEventListener('keyup', (event) => {
 
   if (keysHeld.size === 0) {
     player.isMoving = false;
-    player.currentFrame = 0;
     if (!isPaused) {
       draw();
     }
@@ -535,7 +459,10 @@ function initGame() {
 
   initPauseMenu();
   drawMapFallback('Loading map assets...');
-  preloadAssets(draw);
+  preloadAssets(() => {
+    draw();
+    startAnimationLoop();
+  });
 }
 
 initGame();
