@@ -17,6 +17,7 @@ const PLAYABLE_CHARACTERS = [
   { id: 'robin_hoodlike', label: 'Robin Hood', source: 'robin_hoodlike.gif' },
   { id: 'orange_recolor_monk', label: 'Orange Monk', source: 'orange_recolor_monk.gif' },
   { id: 'chain_armor_bandit', label: 'Bandit', source: 'chain_armor_bandit.gif' },
+  { id: 'skeleton', label: 'Hooded Skeleton', source: 'skeleton.gif' },
 ];
 
 async function patchToJimp(frame) {

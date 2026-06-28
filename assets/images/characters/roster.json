@@ -78,5 +78,13 @@
     "idle": "assets/images/characters/chain_armor_bandit/player_idle.png",
     "walk": "assets/images/characters/chain_armor_bandit/player_walk.png",
     "meta": "assets/images/characters/chain_armor_bandit/player.json"
+  },
+  {
+    "id": "skeleton",
+    "label": "Hooded Skeleton",
+    "preview": "assets/images/characters/skeleton/preview.png",
+    "idle": "assets/images/characters/skeleton/player_idle.png",
+    "walk": "assets/images/characters/skeleton/player_walk.png",
+    "meta": "assets/images/characters/skeleton/player.json"
   }
 ]
