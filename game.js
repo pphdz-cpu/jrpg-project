@@ -6,7 +6,6 @@ if (ctx) {
 }
 
 const ENCOUNTER_CHANCE = 0.15;
-const CHARACTER_ROOT = 'assets/images/characters';
 
 const level = window.TILED_LEVEL;
 const SOURCE_TILE_SIZE = level ? level.tileWidth : 16;
@@ -31,6 +30,7 @@ const mapOffsetY = level && level.offsetY ? level.offsetY : 0;
 const mapNpcs = (level && level.npcs) || [];
 
 let tilesetImage = null;
+let tilesetLoadError = null;
 
 const camera = {
   x: 0,
@@ -99,22 +99,28 @@ function gidToLocalTileId(gid) {
 function preloadAssets(onComplete) {
   if (!level) {
     console.error('Missing window.TILED_LEVEL. Run: npm run build:map');
+    assetsReady = true;
     onComplete();
     return;
   }
 
-  Promise.all([
-    loadImage(TILESET_PATH).then((image) => {
+  loadImage(TILESET_PATH)
+    .then((image) => {
       tilesetImage = image;
-    }),
-    preloadCharacterAssets(level),
-  ])
+    })
     .catch((error) => {
+      tilesetLoadError = error.message;
       console.error(error.message);
     })
     .finally(() => {
-      assetsReady = true;
-      onComplete();
+      preloadCharacterAssets(level)
+        .catch((error) => {
+          console.warn('Character assets failed to load:', error.message);
+        })
+        .finally(() => {
+          assetsReady = true;
+          onComplete();
+        });
     });
 }
 
@@ -153,7 +159,7 @@ function startAnimationLoop() {
   animationFrameId = requestAnimationFrame(tick);
 }
 
-function drawMapFallback(message) {
+function drawMapFallback(message, detail) {
   if (!ctx) {
     return;
   }
@@ -164,12 +170,16 @@ function drawMapFallback(message) {
   ctx.fillStyle = '#ffd54f';
   ctx.font = '18px Segoe UI, sans-serif';
   ctx.fillText(message || 'Loading map...', 24, 40);
+
+  if (detail) {
+    ctx.fillStyle = '#ccc';
+    ctx.font = '14px Segoe UI, sans-serif';
+    ctx.fillText(detail, 24, 68);
+  }
 }
 
 function drawTileMap() {
   if (!tilesetImage) {
-    ctx.fillStyle = '#4a6741';
-    ctx.fillRect(0, 0, worldWidth, worldHeight);
     return;
   }
 
@@ -208,12 +218,23 @@ function draw() {
   }
 
   if (!level) {
-    drawMapFallback('Map data missing. Run: npm run build:map');
+    drawMapFallback(
+      'Map data missing.',
+      'Run npm run build:map and open index.html from the project root.'
+    );
     return;
   }
 
   if (!assetsReady) {
     drawMapFallback('Loading map assets...');
+    return;
+  }
+
+  if (!tilesetImage) {
+    drawMapFallback(
+      'Map tileset failed to load.',
+      `${TILESET_PATH} — run: npm install && npm run build:map`
+    );
     return;
   }
 

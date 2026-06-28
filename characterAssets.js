@@ -1,4 +1,4 @@
-const CHARACTER_ROOT = 'assets/images/characters';
+const CHARACTER_ROOT = 'assets/Characters';
 
 const DIRECTION = {
   DOWN: 0,
@@ -41,10 +41,10 @@ const CharacterAssets = {
 
   paths: {
     playerIdle: `${CHARACTER_ROOT}/player_idle.png`,
-    playerWalk: `${CHARACTER_ROOT}/player_walk.gif`,
+    playerWalk: `${CHARACTER_ROOT}/chain_armor.gif`,
     playerMeta: `${CHARACTER_ROOT}/player.json`,
     npc: (id) => `${CHARACTER_ROOT}/npc_${id}.png`,
-    npcWalk: (id) => `${CHARACTER_ROOT}/npc_${id}_walk.gif`,
+    npcWalk: (id) => `${CHARACTER_ROOT}/npc_${id}.gif`,
   },
 };
 
@@ -156,9 +156,13 @@ async function preloadCharacterAssets(levelData) {
   await loadPlayerMeta();
 
   const loads = [
-    loadImage(CharacterAssets.paths.playerIdle).then((image) => {
-      CharacterAssets.images.playerIdle = image;
-    }),
+    loadImage(CharacterAssets.paths.playerIdle)
+      .then((image) => {
+        CharacterAssets.images.playerIdle = image;
+      })
+      .catch(() => {
+        CharacterAssets.images.playerIdle = null;
+      }),
     loadImage(CharacterAssets.paths.playerWalk)
       .then((image) => {
         CharacterAssets.images.playerWalk = image;
