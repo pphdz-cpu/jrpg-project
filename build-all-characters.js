@@ -128,6 +128,58 @@ async function main() {
   const rosterPath = path.join(OUTPUT_ROOT, 'roster.json');
   fs.writeFileSync(rosterPath, `${JSON.stringify(roster, null, 2)}\n`, 'utf8');
   console.log(`Wrote ${rosterPath} (${roster.length} characters)`);
+
+  const rosterJsPath = path.join(__dirname, 'characterRoster.js');
+  const rosterJs = `const CHARACTER_IMAGE_ROOT = 'assets/images/characters';
+
+const DEFAULT_PLAYER_CHARACTER_ID = '${roster[0] ? roster[0].id : 'chain_armor'}';
+
+const EMBEDDED_ROSTER = ${JSON.stringify(roster, null, 2)};
+
+const CharacterRoster = {
+  characters: [...EMBEDDED_ROSTER],
+  loaded: false,
+
+  getById(id) {
+    return this.characters.find((entry) => entry.id === id) || this.characters[0];
+  },
+
+  getDefaultId() {
+    return this.characters[0] ? this.characters[0].id : DEFAULT_PLAYER_CHARACTER_ID;
+  },
+};
+
+async function loadCharacterRoster() {
+  if (CharacterRoster.loaded) {
+    return CharacterRoster.characters;
+  }
+
+  CharacterRoster.characters = [...EMBEDDED_ROSTER];
+
+  try {
+    const response = await fetch(\`\${CHARACTER_IMAGE_ROOT}/roster.json\`);
+    if (response.ok) {
+      const fetchedRoster = await response.json();
+      if (Array.isArray(fetchedRoster) && fetchedRoster.length > 0) {
+        CharacterRoster.characters = fetchedRoster;
+      }
+    }
+  } catch (error) {
+    // Embedded roster works without a server (file:// or offline).
+  }
+
+  CharacterRoster.loaded = true;
+  return CharacterRoster.characters;
+}
+
+window.CHARACTER_IMAGE_ROOT = CHARACTER_IMAGE_ROOT;
+window.DEFAULT_PLAYER_CHARACTER_ID = DEFAULT_PLAYER_CHARACTER_ID;
+window.CharacterRoster = CharacterRoster;
+window.loadCharacterRoster = loadCharacterRoster;
+`;
+
+  fs.writeFileSync(rosterJsPath, rosterJs, 'utf8');
+  console.log(`Wrote ${rosterJsPath}`);
 }
 
 main().catch((error) => {

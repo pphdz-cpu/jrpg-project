@@ -9,6 +9,7 @@ function getPauseElements() {
     pauseBtn: document.getElementById('pause-btn'),
     closeBtn: document.getElementById('close-menu-btn'),
     selector: document.getElementById('character-selector'),
+    selectStatus: document.getElementById('character-select-status'),
     nameEl: document.getElementById('pause-name'),
     jobEl: document.getElementById('pause-job'),
     hpEl: document.getElementById('pause-hp'),
@@ -38,6 +39,13 @@ function updatePauseMenuStats() {
   speedEl.textContent = stats.speed;
 }
 
+function updateCharacterSelectStatus(message) {
+  const { selectStatus } = PauseMenuUI.elements;
+  if (selectStatus) {
+    selectStatus.textContent = message;
+  }
+}
+
 function markSelectedCharacter(characterId) {
   const { selector } = PauseMenuUI.elements;
   if (!selector) {
@@ -49,13 +57,22 @@ function markSelectedCharacter(characterId) {
   });
 }
 
-function buildCharacterSelector() {
+async function buildCharacterSelector() {
   const { selector } = PauseMenuUI.elements;
   if (!selector) {
     return;
   }
 
+  await loadCharacterRoster();
   selector.innerHTML = '';
+
+  if (!CharacterRoster.characters.length) {
+    const empty = document.createElement('p');
+    empty.id = 'character-selector-empty';
+    empty.textContent = 'No characters found. Run: npm run build:characters';
+    selector.appendChild(empty);
+    return;
+  }
 
   CharacterRoster.characters.forEach((character) => {
     const button = document.createElement('button');
@@ -67,7 +84,6 @@ function buildCharacterSelector() {
     const image = document.createElement('img');
     image.src = character.preview;
     image.alt = character.label;
-    image.loading = 'lazy';
 
     const label = document.createElement('span');
     label.textContent = character.label;
@@ -82,36 +98,58 @@ function buildCharacterSelector() {
     selector.appendChild(button);
   });
 
-  markSelectedCharacter(GameState.currentPlayerImage || CharacterRoster.getDefaultId());
+  const activeId = GameState.currentPlayerImage || CharacterRoster.getDefaultId();
+  markSelectedCharacter(activeId);
+
+  const activeCharacter = CharacterRoster.getById(activeId);
+  if (activeCharacter) {
+    updateCharacterSelectStatus(`Playing as ${activeCharacter.label}. Click another hero to swap.`);
+  }
 }
 
 async function selectPlayerCharacter(characterId) {
-  if (!characterId || characterId === GameState.currentPlayerImage) {
-    markSelectedCharacter(characterId);
+  if (!characterId) {
     return;
   }
 
-  GameState.setCurrentPlayerImage(characterId);
+  const selected = CharacterRoster.getById(characterId);
+  updateCharacterSelectStatus(`Loading ${selected.label}...`);
   markSelectedCharacter(characterId);
 
+  GameState.setCurrentPlayerImage(characterId);
+
   const loaded = await setPlayerCharacter(characterId);
-  if (loaded && typeof window.redrawGame === 'function') {
+  if (!loaded) {
+    updateCharacterSelectStatus(`Could not load ${selected.label}. Run: npm run build:characters`);
+    return;
+  }
+
+  if (window.player) {
+    window.player.isMoving = false;
+    window.player.walkStartedAt = 0;
+  }
+
+  if (typeof window.redrawGame === 'function') {
     window.redrawGame();
   }
+
+  updateCharacterSelectStatus(`Now playing as ${selected.label}. Press Resume to walk around!`);
+  markSelectedCharacter(characterId);
 }
 
-function openPauseMenu() {
+async function openPauseMenu() {
   if (typeof window.setGamePaused === 'function') {
     window.setGamePaused(true);
   }
 
   PauseMenuUI.isOpen = true;
   updatePauseMenuStats();
-  buildCharacterSelector();
+  await buildCharacterSelector();
 
   const { menu } = PauseMenuUI.elements;
   if (menu) {
     menu.classList.add('is-open');
+    menu.setAttribute('aria-hidden', 'false');
   }
 }
 
@@ -125,6 +163,7 @@ function closePauseMenu() {
   const { menu } = PauseMenuUI.elements;
   if (menu) {
     menu.classList.remove('is-open');
+    menu.setAttribute('aria-hidden', 'true');
   }
 
   if (typeof window.redrawGame === 'function') {
@@ -199,8 +238,9 @@ window.closePauseMenu = closePauseMenu;
 window.togglePauseMenu = togglePauseMenu;
 window.selectPlayerCharacter = selectPlayerCharacter;
 
-function initApp() {
+async function initApp() {
   initPauseMenuUI();
+  await loadCharacterRoster();
   initGame();
 }
 

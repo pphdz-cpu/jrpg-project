@@ -98,6 +98,8 @@ const player = {
   walkStartedAt: 0,
 };
 
+window.player = player;
+
 const CHARACTER_ID = 'char_001';
 
 const keysHeld = new Set();

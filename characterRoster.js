@@ -2,19 +2,99 @@ const CHARACTER_IMAGE_ROOT = 'assets/images/characters';
 
 const DEFAULT_PLAYER_CHARACTER_ID = 'chain_armor';
 
-const FALLBACK_ROSTER = [
+const EMBEDDED_ROSTER = [
   {
-    id: 'chain_armor',
-    label: 'Chain Knight',
-    preview: `${CHARACTER_IMAGE_ROOT}/chain_armor/preview.png`,
-    idle: `${CHARACTER_IMAGE_ROOT}/chain_armor/player_idle.png`,
-    walk: `${CHARACTER_IMAGE_ROOT}/chain_armor/player_walk.png`,
-    meta: `${CHARACTER_IMAGE_ROOT}/chain_armor/player.json`,
+    "id": "chain_armor",
+    "label": "Chain Knight",
+    "preview": "assets/images/characters/chain_armor/preview.png",
+    "idle": "assets/images/characters/chain_armor/player_idle.png",
+    "walk": "assets/images/characters/chain_armor/player_walk.png",
+    "meta": "assets/images/characters/chain_armor/player.json"
   },
+  {
+    "id": "leather_armor",
+    "label": "Leather Scout",
+    "preview": "assets/images/characters/leather_armor/preview.png",
+    "idle": "assets/images/characters/leather_armor/player_idle.png",
+    "walk": "assets/images/characters/leather_armor/player_walk.png",
+    "meta": "assets/images/characters/leather_armor/player.json"
+  },
+  {
+    "id": "plate_armor",
+    "label": "Plate Guardian",
+    "preview": "assets/images/characters/plate_armor/preview.png",
+    "idle": "assets/images/characters/plate_armor/player_idle.png",
+    "walk": "assets/images/characters/plate_armor/player_walk.png",
+    "meta": "assets/images/characters/plate_armor/player.json"
+  },
+  {
+    "id": "robe",
+    "label": "Robe Mage",
+    "preview": "assets/images/characters/robe/preview.png",
+    "idle": "assets/images/characters/robe/player_idle.png",
+    "walk": "assets/images/characters/robe/player_walk.png",
+    "meta": "assets/images/characters/robe/player.json"
+  },
+  {
+    "id": "simple_clothes",
+    "label": "Villager",
+    "preview": "assets/images/characters/simple_clothes/preview.png",
+    "idle": "assets/images/characters/simple_clothes/player_idle.png",
+    "walk": "assets/images/characters/simple_clothes/player_walk.png",
+    "meta": "assets/images/characters/simple_clothes/player.json"
+  },
+  {
+    "id": "mixed_metal",
+    "label": "Mixed Metal",
+    "preview": "assets/images/characters/mixed_metal/preview.png",
+    "idle": "assets/images/characters/mixed_metal/player_idle.png",
+    "walk": "assets/images/characters/mixed_metal/player_walk.png",
+    "meta": "assets/images/characters/mixed_metal/player.json"
+  },
+  {
+    "id": "dark_skinned_knight",
+    "label": "Dark Knight",
+    "preview": "assets/images/characters/dark_skinned_knight/preview.png",
+    "idle": "assets/images/characters/dark_skinned_knight/player_idle.png",
+    "walk": "assets/images/characters/dark_skinned_knight/player_walk.png",
+    "meta": "assets/images/characters/dark_skinned_knight/player.json"
+  },
+  {
+    "id": "robin_hoodlike",
+    "label": "Robin Hood",
+    "preview": "assets/images/characters/robin_hoodlike/preview.png",
+    "idle": "assets/images/characters/robin_hoodlike/player_idle.png",
+    "walk": "assets/images/characters/robin_hoodlike/player_walk.png",
+    "meta": "assets/images/characters/robin_hoodlike/player.json"
+  },
+  {
+    "id": "orange_recolor_monk",
+    "label": "Orange Monk",
+    "preview": "assets/images/characters/orange_recolor_monk/preview.png",
+    "idle": "assets/images/characters/orange_recolor_monk/player_idle.png",
+    "walk": "assets/images/characters/orange_recolor_monk/player_walk.png",
+    "meta": "assets/images/characters/orange_recolor_monk/player.json"
+  },
+  {
+    "id": "chain_armor_bandit",
+    "label": "Bandit",
+    "preview": "assets/images/characters/chain_armor_bandit/preview.png",
+    "idle": "assets/images/characters/chain_armor_bandit/player_idle.png",
+    "walk": "assets/images/characters/chain_armor_bandit/player_walk.png",
+    "meta": "assets/images/characters/chain_armor_bandit/player.json"
+  },
+  {
+    "id": "skeleton",
+    "label": "Hooded Skeleton",
+    "preview": "assets/images/characters/skeleton/preview.png",
+    "idle": "assets/images/characters/skeleton/player_idle.png",
+    "walk": "assets/images/characters/skeleton/player_walk.png",
+    "meta": "assets/images/characters/skeleton/player.json"
+  }
 ];
 
 const CharacterRoster = {
-  characters: [...FALLBACK_ROSTER],
+  characters: [...EMBEDDED_ROSTER],
   loaded: false,
 
   getById(id) {
@@ -27,18 +107,22 @@ const CharacterRoster = {
 };
 
 async function loadCharacterRoster() {
+  if (CharacterRoster.loaded) {
+    return CharacterRoster.characters;
+  }
+
+  CharacterRoster.characters = [...EMBEDDED_ROSTER];
+
   try {
     const response = await fetch(`${CHARACTER_IMAGE_ROOT}/roster.json`);
-    if (!response.ok) {
-      throw new Error(`Failed to load roster (${response.status})`);
-    }
-
-    const roster = await response.json();
-    if (Array.isArray(roster) && roster.length > 0) {
-      CharacterRoster.characters = roster;
+    if (response.ok) {
+      const fetchedRoster = await response.json();
+      if (Array.isArray(fetchedRoster) && fetchedRoster.length > 0) {
+        CharacterRoster.characters = fetchedRoster;
+      }
     }
   } catch (error) {
-    CharacterRoster.characters = [...FALLBACK_ROSTER];
+    // Embedded roster works without a server (file:// or offline).
   }
 
   CharacterRoster.loaded = true;
