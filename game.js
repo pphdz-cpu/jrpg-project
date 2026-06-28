@@ -7,8 +7,8 @@ if (ctx) {
 
 const ENCOUNTER_CHANCE = 0.15;
 const WALK_FRAMES = 4;
-const CHARACTER_SHEET_PATH = 'assets/character_sheet.png';
-const CHARACTER_FALLBACK_PATH = 'assets/character.png';
+const CHARACTER_SHEET_PATH = window.CHARACTER_SPRITE_SHEET || 'assets/character_sheet_processed.png';
+const CHARACTER_FALLBACK_PATH = 'assets/character_sheet.png';
 
 const level = window.TILED_LEVEL;
 const SOURCE_TILE_SIZE = level ? level.tileWidth : 16;
@@ -32,30 +32,30 @@ const mapOffsetX = level && level.offsetX ? level.offsetX : 0;
 const mapOffsetY = level && level.offsetY ? level.offsetY : 0;
 const displayScale = tileSize / SOURCE_TILE_SIZE;
 
-const SPRITE_FRAMES = {
+const SPRITE_FRAMES = window.CHARACTER_FRAMES || {
   0: [
-    { sx: 146, sy: 130, sw: 195, sh: 252 },
-    { sx: 341, sy: 130, sw: 342, sh: 252 },
-    { sx: 683, sy: 130, sw: 314, sh: 252 },
-    { sx: 1071, sy: 130, sw: 226, sh: 252 },
+    { sx: 341, sy: 28, sw: 341, sh: 484 },
+    { sx: 682, sy: 28, sw: 341, sh: 484 },
+    { sx: 1023, sy: 28, sw: 341, sh: 484 },
+    { sx: 1364, sy: 28, sw: 341, sh: 477 },
   ],
   1: [
-    { sx: 184, sy: 1607, sw: 157, sh: 371 },
-    { sx: 341, sy: 1606, sw: 342, sh: 372 },
-    { sx: 683, sy: 1606, sw: 310, sh: 372 },
-    { sx: 1111, sy: 1606, sw: 178, sh: 372 },
+    { sx: 341, sy: 1552, sw: 341, sh: 472 },
+    { sx: 682, sy: 1600, sw: 311, sh: 423 },
+    { sx: 1111, sy: 1599, sw: 178, sh: 425 },
+    { sx: 1400, sy: 1600, sw: 305, sh: 424 },
   ],
   2: [
-    { sx: 341, sy: 1099, sw: 342, sh: 362 },
-    { sx: 683, sy: 1099, sw: 294, sh: 362 },
-    { sx: 1096, sy: 1099, sw: 185, sh: 362 },
-    { sx: 1392, sy: 1099, sw: 315, sh: 362 },
+    { sx: 341, sy: 1040, sw: 341, sh: 481 },
+    { sx: 682, sy: 1097, sw: 295, sh: 424 },
+    { sx: 1096, sy: 1095, sw: 185, sh: 426 },
+    { sx: 1392, sy: 1097, sw: 313, sh: 424 },
   ],
   3: [
-    { sx: 341, sy: 587, sw: 342, sh: 362 },
-    { sx: 683, sy: 587, sw: 318, sh: 362 },
-    { sx: 1057, sy: 587, sw: 308, sh: 362 },
-    { sx: 1365, sy: 587, sw: 342, sh: 362 },
+    { sx: 341, sy: 512, sw: 341, sh: 497 },
+    { sx: 682, sy: 512, sw: 319, sh: 497 },
+    { sx: 1057, sy: 512, sw: 307, sh: 497 },
+    { sx: 1364, sy: 585, sw: 341, sh: 424 },
   ],
 };
 
@@ -188,21 +188,14 @@ function updateCamera() {
 }
 
 function drawPlayer() {
-  const drawWidth = entityFootprintWidth * displayScale;
-  const drawHeight = entityVisualHeight * displayScale;
-  const drawX = player.x * tileSize + (tileSize - drawWidth) / 2;
-  const drawY = player.y * tileSize + tileSize - drawHeight;
+  const feetX = player.x * tileSize + tileSize / 2;
+  const feetY = player.y * tileSize + tileSize;
 
   if (!characterSheet) {
+    const drawWidth = entityFootprintWidth * displayScale;
+    const drawHeight = entityVisualHeight * displayScale;
     ctx.fillStyle = '#1565c0';
-    ctx.fillRect(drawX, drawY, drawWidth, drawHeight);
-    ctx.strokeStyle = '#ffffff';
-    ctx.strokeRect(
-      player.x * tileSize,
-      player.y * tileSize + tileSize - entityFootprintHeight * displayScale,
-      entityFootprintWidth * displayScale,
-      entityFootprintHeight * displayScale
-    );
+    ctx.fillRect(feetX - drawWidth / 2, feetY - drawHeight, drawWidth, drawHeight);
     return;
   }
 
@@ -210,10 +203,17 @@ function drawPlayer() {
   const rect = frames && frames[player.currentFrame];
 
   if (!rect) {
+    const drawWidth = entityFootprintWidth * displayScale;
+    const drawHeight = entityVisualHeight * displayScale;
     ctx.fillStyle = '#1565c0';
-    ctx.fillRect(drawX, drawY, drawWidth, drawHeight);
+    ctx.fillRect(feetX - drawWidth / 2, feetY - drawHeight, drawWidth, drawHeight);
     return;
   }
+
+  const targetHeight = entityVisualHeight * displayScale;
+  const targetWidth = targetHeight * (rect.sw / rect.sh);
+  const drawX = feetX - targetWidth / 2;
+  const drawY = feetY - targetHeight;
 
   ctx.drawImage(
     characterSheet,
@@ -223,8 +223,8 @@ function drawPlayer() {
     rect.sh,
     drawX,
     drawY,
-    drawWidth,
-    drawHeight
+    targetWidth,
+    targetHeight
   );
 }
 
