@@ -1,6 +1,7 @@
 const Jimp = require('jimp');
 
 const TILE_SIZE = 16;
+const FEET_ROW_START = 10;
 
 const LOGIC_COLORS = {
   spawn: { r: 255, g: 0, b: 0 },
@@ -58,11 +59,16 @@ function isWaterPixel(r, g, b) {
   return b > 95 && b > r + 20 && b > g + 5 && r < 120 && g < 140;
 }
 
+function isTreeTrunkPixel(r, g, b) {
+  return r > 70 && r < 150 && g > 30 && g < 100 && b < 70 && r > g + 10;
+}
+
+function isTreeCanopyPixel(r, g, b) {
+  return r > 140 && g > 70 && g < 190 && b < 100 && r > g;
+}
+
 function isTreePixel(r, g, b) {
-  return (
-    (r > 140 && g > 70 && g < 190 && b < 100 && r > g)
-    || (r > 70 && r < 150 && g > 30 && g < 100 && b < 70 && r > g + 10)
-  );
+  return isTreeTrunkPixel(r, g, b) || isTreeCanopyPixel(r, g, b);
 }
 
 function isWoodPixel(r, g, b) {
@@ -106,6 +112,57 @@ function isCharacterPixel(r, g, b) {
   );
 }
 
+function createEmptyBandCounts() {
+  return {
+    floor: 0,
+    water: 0,
+    trunk: 0,
+    canopy: 0,
+    wood: 0,
+    wall: 0,
+    roof: 0,
+    character: 0,
+    other: 0,
+    logicBlue: 0,
+    logicRed: 0,
+  };
+}
+
+function classifyPixel(r, g, b) {
+  if (isGrassPixel(r, g, b)) {
+    return 'floor';
+  }
+  if (isPathPixel(r, g, b)) {
+    return 'floor';
+  }
+  if (isDirtPixel(r, g, b)) {
+    return 'floor';
+  }
+  if (isWaterPixel(r, g, b)) {
+    return 'water';
+  }
+  if (isCharacterPixel(r, g, b)) {
+    return 'character';
+  }
+  if (isTreeTrunkPixel(r, g, b)) {
+    return 'trunk';
+  }
+  if (isTreeCanopyPixel(r, g, b)) {
+    return 'canopy';
+  }
+  if (isWoodPixel(r, g, b)) {
+    return 'wood';
+  }
+  if (isRoofPixel(r, g, b)) {
+    return 'roof';
+  }
+  if (isStoneWallPixel(r, g, b)) {
+    return 'wall';
+  }
+
+  return 'other';
+}
+
 function analyzeTile(mockup, logic, col, row, offsetX, offsetY) {
   const counts = {
     grass: 0,
@@ -123,22 +180,31 @@ function analyzeTile(mockup, logic, col, row, offsetX, offsetY) {
     logicDamage: 0,
   };
 
+  const feet = createEmptyBandCounts();
+  const upper = createEmptyBandCounts();
+
   for (let dy = 0; dy < TILE_SIZE; dy += 1) {
     for (let dx = 0; dx < TILE_SIZE; dx += 1) {
       const x = offsetX + col * TILE_SIZE + dx;
       const y = offsetY + row * TILE_SIZE + dy;
       const { r, g, b } = Jimp.intToRGBA(mockup.getPixelColor(x, y));
       const logicPixel = Jimp.intToRGBA(logic.getPixelColor(x, y));
+      const band = dy >= FEET_ROW_START ? feet : upper;
+      const pixelType = classifyPixel(r, g, b);
 
       if (isExactLogicColor(logicPixel.r, logicPixel.g, logicPixel.b, LOGIC_COLORS.collision)) {
         counts.logicBlue += 1;
+        band.logicBlue += 1;
       }
       if (isExactLogicColor(logicPixel.r, logicPixel.g, logicPixel.b, LOGIC_COLORS.spawn)) {
         counts.logicRed += 1;
+        band.logicRed += 1;
       }
       if (isExactLogicColor(logicPixel.r, logicPixel.g, logicPixel.b, LOGIC_COLORS.damage)) {
         counts.logicDamage += 1;
       }
+
+      band[pixelType] += 1;
 
       if (isGrassPixel(r, g, b)) {
         counts.grass += 1;
@@ -164,97 +230,172 @@ function analyzeTile(mockup, logic, col, row, offsetX, offsetY) {
     }
   }
 
-  return counts;
+  return { counts, feet, upper };
 }
 
-function isEnvironmentBlocked(counts) {
-  if (counts.logicRed > 0) {
+function hasWalkableFloor(band) {
+  return band.floor >= 18;
+}
+
+function isCanopyWalkable(analysis) {
+  const { feet, upper } = analysis;
+
+  if (feet.water >= 8 || feet.wall >= 16 || feet.roof >= 16 || feet.wood >= 18) {
     return false;
   }
 
-  if (counts.logicBlue > 0) {
+  if (feet.character >= 24) {
+    return false;
+  }
+
+  const walkableFeet = feet.floor >= 28 && feet.floor >= feet.trunk;
+
+  if (!walkableFeet && !hasWalkableFloor(feet)) {
+    return false;
+  }
+
+  if (!walkableFeet && feet.trunk >= 10) {
+    return false;
+  }
+
+  const overhead = upper.trunk + upper.canopy + upper.roof + upper.wall + upper.wood + upper.other;
+  return overhead >= 12 || upper.canopy >= 8 || upper.logicBlue >= 8;
+}
+
+function isEnvironmentBlocked(analysis) {
+  const { counts, feet, upper } = analysis;
+
+  if (counts.logicRed > 0 || feet.logicRed > 0) {
+    return false;
+  }
+
+  if (isCanopyWalkable(analysis)) {
+    return false;
+  }
+
+  if (feet.floor >= 28 && feet.floor >= feet.trunk && feet.water < 8 && feet.wall < 16 && feet.wood < 18) {
+    return false;
+  }
+
+  if (feet.water >= 8 || counts.water >= 20) {
     return true;
   }
 
-  if (counts.character >= 95) {
+  if (feet.trunk >= 8) {
+    return true;
+  }
+
+  if (feet.wall >= 20 || feet.roof >= 20) {
+    return true;
+  }
+
+  if (feet.wood >= 22) {
+    return true;
+  }
+
+  if (feet.character >= 28) {
+    return true;
+  }
+
+  if (feet.logicBlue >= 10) {
+    return true;
+  }
+
+  if (counts.logicBlue > 0 && !hasWalkableFloor(feet)) {
     return true;
   }
 
   const floor = counts.grass + counts.path + counts.dirt;
+  const feetFloor = feet.floor;
+  const feetSolid = feet.water + feet.trunk + feet.wood + feet.wall + feet.roof + feet.other;
+
+  if (feetFloor >= 24 && feet.trunk < 8 && feetSolid < 30) {
+    return false;
+  }
+
+  if (counts.roof >= 50 && feetFloor < 20) {
+    return true;
+  }
+
+  if (counts.wall >= 50 && feetFloor < 20) {
+    return true;
+  }
+
+  if (counts.wood >= 45 && feetFloor < 20) {
+    return true;
+  }
+
+  if (counts.tree >= 60 && feet.trunk >= 6 && feetFloor < 24) {
+    return true;
+  }
+
   const blocking = counts.water + counts.tree + counts.wood + counts.wall + counts.roof + counts.other;
 
-  if (counts.water >= 20) {
+  if (blocking >= 110 && blocking > floor + 40 && feetFloor < 24) {
     return true;
   }
 
-  if (floor >= 130) {
-    return false;
-  }
-
-  if (floor >= 85 && counts.roof < 30 && counts.wall < 30 && counts.wood < 35) {
-    return false;
-  }
-
-  if (counts.roof >= 50) {
+  if (floor < 50 && blocking >= 60 && feetFloor < 20) {
     return true;
   }
 
-  if (counts.wall >= 50) {
-    return true;
-  }
-
-  if (counts.wood >= 45) {
-    return true;
-  }
-
-  if (counts.tree >= 45 && floor < 70) {
-    return true;
-  }
-
-  if (blocking >= 110 && blocking > floor + 40) {
-    return true;
-  }
-
-  if (floor < 50 && blocking >= 60) {
+  if (counts.character >= 95 && feet.character >= 20) {
     return true;
   }
 
   return false;
 }
 
-function isNpcBlocked(counts, environmentBlocked) {
-  if (!environmentBlocked || counts.logicRed > 0 || counts.character < 95) {
+function isOverheadTile(analysis) {
+  return isCanopyWalkable(analysis);
+}
+
+function isNpcBlocked(analysis, environmentBlocked) {
+  if (!environmentBlocked) {
     return false;
   }
 
-  const floor = counts.grass + counts.path + counts.dirt;
-  return floor < 90;
+  const { counts, feet } = analysis;
+  if (counts.logicRed > 0 || feet.logicRed > 0 || feet.character < 24) {
+    return false;
+  }
+
+  return feet.character >= 24 && feet.floor < 24;
 }
 
 function buildBlockedGrid(mockup, logic, mapWidth, mapHeight, offsetX = 0, offsetY = 0) {
   const blocked = [];
+  const overhead = [];
   const npcCells = [];
 
   for (let row = 0; row < mapHeight; row += 1) {
-    const rowValues = [];
+    const blockedRow = [];
+    const overheadRow = [];
 
     for (let col = 0; col < mapWidth; col += 1) {
-      const counts = analyzeTile(mockup, logic, col, row, offsetX, offsetY);
-      const environmentBlocked = isEnvironmentBlocked(counts);
-      const cellBlocked = environmentBlocked;
+      const analysis = analyzeTile(mockup, logic, col, row, offsetX, offsetY);
+      const environmentBlocked = isEnvironmentBlocked(analysis);
+      const overheadTile = isOverheadTile(analysis);
 
-      rowValues.push(cellBlocked ? 1 : 0);
+      blockedRow.push(environmentBlocked ? 1 : 0);
+      overheadRow.push(overheadTile ? 1 : 0);
 
-      if (isNpcBlocked(counts, environmentBlocked)) {
-        npcCells.push({ x: col, y: row, characterPixels: counts.character });
+      if (isNpcBlocked(analysis, environmentBlocked)) {
+        npcCells.push({
+          x: col,
+          y: row,
+          characterPixels: analysis.counts.character,
+        });
       }
     }
 
-    blocked.push(rowValues);
+    blocked.push(blockedRow);
+    overhead.push(overheadRow);
   }
 
   return {
     blocked,
+    overhead,
     npcCells,
   };
 }
@@ -307,17 +448,17 @@ function clusterNpcCells(npcCells) {
   return clusters
     .filter((cluster) => cluster.length <= 8)
     .map((cluster, index) => {
-    const avgX = cluster.reduce((sum, cell) => sum + cell.x, 0) / cluster.length;
-    const avgY = cluster.reduce((sum, cell) => sum + cell.y, 0) / cluster.length;
+      const avgX = cluster.reduce((sum, cell) => sum + cell.x, 0) / cluster.length;
+      const avgY = cluster.reduce((sum, cell) => sum + cell.y, 0) / cluster.length;
 
-    return {
-      id: `npc_${String(index + 1).padStart(3, '0')}`,
-      x: Math.round(avgX),
-      y: Math.round(avgY),
-      direction: 0,
-      tiles: cluster.map((cell) => ({ x: cell.x, y: cell.y })),
-    };
-  });
+      return {
+        id: `npc_${String(index + 1).padStart(3, '0')}`,
+        x: Math.round(avgX),
+        y: Math.round(avgY),
+        direction: 0,
+        tiles: cluster.map((cell) => ({ x: cell.x, y: cell.y })),
+      };
+    });
 }
 
 async function detectMapCollision(options) {
@@ -328,7 +469,7 @@ async function detectMapCollision(options) {
   const mapWidth = options.mapWidth;
   const mapHeight = options.mapHeight;
 
-  const { blocked, npcCells } = buildBlockedGrid(
+  const { blocked, overhead, npcCells } = buildBlockedGrid(
     mockup,
     logic,
     mapWidth,
@@ -341,12 +482,18 @@ async function detectMapCollision(options) {
     (sum, row) => sum + row.reduce((rowSum, value) => rowSum + value, 0),
     0
   );
+  const overheadCount = overhead.reduce(
+    (sum, row) => sum + row.reduce((rowSum, value) => rowSum + value, 0),
+    0
+  );
   const npcs = clusterNpcCells(npcCells);
 
   return {
     blocked,
+    overhead,
     npcs,
     blockedCount,
+    overheadCount,
     walkableCount: mapWidth * mapHeight - blockedCount,
     npcCellCount: npcCells.length,
   };
@@ -354,8 +501,10 @@ async function detectMapCollision(options) {
 
 module.exports = {
   TILE_SIZE,
+  FEET_ROW_START,
   analyzeTile,
   isEnvironmentBlocked,
+  isCanopyWalkable,
   isNpcBlocked,
   buildBlockedGrid,
   clusterNpcCells,

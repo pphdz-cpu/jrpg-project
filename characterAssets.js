@@ -131,22 +131,6 @@ function drawCharacterSprite(ctx, options) {
 
   const spriteImage = (isMoving && walkImage) || image;
   if (!spriteImage) {
-    const feetX = x * tileSize + tileSize / 2;
-    const feetY = y * tileSize + tileSize;
-    const dimensions = getDrawDimensions(
-      { sw: meta.frameWidth, sh: meta.frameHeight },
-      meta,
-      tileSize,
-      sourceTileSize
-    );
-
-    ctx.fillStyle = '#1565c0';
-    ctx.fillRect(
-      Math.round(feetX - dimensions.footprintWidth / 2),
-      Math.round(feetY - dimensions.footprintHeight),
-      dimensions.footprintWidth,
-      dimensions.footprintHeight
-    );
     return;
   }
 

@@ -510,6 +510,7 @@ ${csvRows.join('\n')}
     firstGid: 1,
     layer: buildLayerGrid(mapData, mapWidth, mapHeight),
     blocked: collisionData.blocked,
+    overhead: collisionData.overhead,
     collisionTileIds: [...collisionTileIds].sort((a, b) => a - b),
     damageTileIds: [...damageTileIds].sort((a, b) => a - b),
     spawns: spawnPoints,
@@ -540,6 +541,7 @@ ${csvRows.join('\n')}
     collisionTileCount: collisionTileIds.size,
     damageTileCount: damageTileIds.size,
     blockedCellCount: collisionData.blockedCount,
+    overheadCellCount: collisionData.overheadCount,
     walkableCellCount: collisionData.walkableCount,
     npcCount: collisionData.npcs.length,
     npcCellCount: collisionData.npcCellCount,
@@ -559,6 +561,7 @@ ${csvRows.join('\n')}
   console.log(`Collision tiles: ${collisionTileIds.size}`);
   console.log(`Damage tiles: ${damageTileIds.size}`);
   console.log(`Blocked cells: ${collisionData.blockedCount}`);
+  console.log(`Overhead/canopy cells: ${collisionData.overheadCount}`);
   console.log(`Walkable cells: ${collisionData.walkableCount}`);
   console.log(`Detected NPCs: ${collisionData.npcs.length}`);
   console.log(`Entity footprint: ${entityDimensions.entityWidth}x${entityDimensions.entityHeight}px`);

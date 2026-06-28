@@ -20,6 +20,8 @@ const worldHeight = mapRows * tileSize;
 const collisionTileIds = new Set(level ? level.collisionTileIds : []);
 const damageTileIds = new Set(level ? level.damageTileIds : []);
 const blockedCells = level ? level.blocked : null;
+const overheadCells = level ? level.overhead : null;
+const CANOPY_SOURCE_ROWS = 10;
 const tilesetColumns = level ? level.tilesetColumns : 1;
 const tilesetFirstGid = level ? level.firstGid : 1;
 const TILESET_PATH = level ? level.tileset : 'assets/map-tileset.png';
@@ -180,6 +182,33 @@ function drawMapFallback(message, detail) {
   }
 }
 
+function drawTileSlice(col, row, sourceY, sourceHeight) {
+  const gid = map[row][col];
+  const localTileId = gidToLocalTileId(gid);
+
+  if (localTileId < 0) {
+    return;
+  }
+
+  const sx = (localTileId % tilesetColumns) * SOURCE_TILE_SIZE;
+  const sy = Math.floor(localTileId / tilesetColumns) * SOURCE_TILE_SIZE + sourceY;
+  const destX = col * tileSize;
+  const destY = row * tileSize + Math.round((sourceY / SOURCE_TILE_SIZE) * tileSize);
+  const destHeight = Math.round((sourceHeight / SOURCE_TILE_SIZE) * tileSize);
+
+  ctx.drawImage(
+    tilesetImage,
+    sx,
+    sy,
+    SOURCE_TILE_SIZE,
+    sourceHeight,
+    destX,
+    destY,
+    tileSize,
+    destHeight
+  );
+}
+
 function drawTileMap() {
   if (!tilesetImage) {
     return;
@@ -187,29 +216,44 @@ function drawTileMap() {
 
   for (let row = 0; row < mapRows; row += 1) {
     for (let col = 0; col < mapCols; col += 1) {
-      const gid = map[row][col];
-      const localTileId = gidToLocalTileId(gid);
+      const isSplitCanopy = overheadCells
+        && overheadCells[row]
+        && overheadCells[row][col]
+        && shouldDrawCanopyOverPlayer(col, row);
 
-      if (localTileId < 0) {
+      if (isSplitCanopy) {
+        drawTileSlice(col, row, CANOPY_SOURCE_ROWS, SOURCE_TILE_SIZE - CANOPY_SOURCE_ROWS);
         continue;
       }
 
-      const sx = (localTileId % tilesetColumns) * SOURCE_TILE_SIZE;
-      const sy = Math.floor(localTileId / tilesetColumns) * SOURCE_TILE_SIZE;
-      const destX = col * tileSize;
-      const destY = row * tileSize;
+      drawTileSlice(col, row, 0, SOURCE_TILE_SIZE);
+    }
+  }
+}
 
-      ctx.drawImage(
-        tilesetImage,
-        sx,
-        sy,
-        SOURCE_TILE_SIZE,
-        SOURCE_TILE_SIZE,
-        destX,
-        destY,
-        tileSize,
-        tileSize
-      );
+function shouldDrawCanopyOverPlayer(col, row) {
+  if (!overheadCells || !overheadCells[row] || !overheadCells[row][col]) {
+    return false;
+  }
+
+  const rowDistance = player.y - row;
+  const colDistance = Math.abs(player.x - col);
+
+  return colDistance <= 1 && rowDistance >= -1 && rowDistance <= 2;
+}
+
+function drawOverheadCanopies() {
+  if (!tilesetImage || !overheadCells) {
+    return;
+  }
+
+  for (let row = 0; row < mapRows; row += 1) {
+    for (let col = 0; col < mapCols; col += 1) {
+      if (!shouldDrawCanopyOverPlayer(col, row)) {
+        continue;
+      }
+
+      drawTileSlice(col, row, 0, CANOPY_SOURCE_ROWS);
     }
   }
 }
@@ -247,8 +291,8 @@ function draw() {
   ctx.translate(-camera.x, -camera.y);
   ctx.imageSmoothingEnabled = false;
   drawTileMap();
-  drawNpcs(ctx, mapNpcs, tileSize, SOURCE_TILE_SIZE);
   drawPlayer();
+  drawOverheadCanopies();
   ctx.restore();
 }
 
@@ -324,7 +368,7 @@ function isWalkable(x, y) {
     return false;
   }
 
-  if (collisionTileIds.has(localTileId)) {
+  if (!blockedCells && collisionTileIds.has(localTileId)) {
     return false;
   }
 
