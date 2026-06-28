@@ -29,6 +29,14 @@ const GameState = {
     return !this.isSafeZone;
   },
 
+  isTown() {
+    return this.zoneType === ZONE_TYPES.TOWN;
+  },
+
+  isOverworld() {
+    return this.zoneType === ZONE_TYPES.OVERWORLD;
+  },
+
   setZone(zoneType, options = {}) {
     this.zoneType = zoneType;
     this.isSafeZone = typeof options.isSafeZone === 'boolean'
@@ -50,7 +58,7 @@ window.GameState = GameState;
 
 /**
  * Switch to another map and update zone rules.
- * Pass generated level.js data (or window.TILED_LEVEL shape) for the destination map.
+ * Prefer transitionToMapById('town') / exitToOverworld() from maps.js.
  */
 window.transitionToMap = function transitionToMap(levelData) {
   GameState.applyMap(levelData);
